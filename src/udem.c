@@ -78,7 +78,12 @@ token_t DEM_token[]={
 	{ "finale",             TOKEN_FINALE, c_finale },
 	{ "cdtrack",            TOKEN_CDTRACK, c_cdtrack },
 	{ "sellscreen",         TOKEN_SELLSCREEN, c_sellscreen },
-	{ "cutscene",		TOKEN_CUTSCENE, c_cutscene },
+	{ "cutscene",		        TOKEN_CUTSCENE, c_cutscene },
+	{ "showlmp",		        TOKEN_SHOWLMP, c_showlmp },
+	{ "hidelmp",		        TOKEN_HIDELMP, c_hidelmp },
+	{ "skybox",			        TOKEN_SKYBOX, c_skybox },
+	{ "spawnstatic2",       TOKEN_SPAWNSTATIC2, c_spawnstatic2 },
+	{ "spawnbaseline2",     TOKEN_SPAWNBASELINE2, c_spawnbaseline2 },
 	{ "updateentity",       TOKEN_UPDATEENTITY, 0 },
 
 	{ "id",                 TOKEN_ID, 0 },
@@ -140,15 +145,17 @@ token_t DEM_token[]={
 	{ "count",              TOKEN_COUNT, 0 },
 	{ "save",               TOKEN_SAVE, 0 },
 	{ "take",               TOKEN_TAKE, 0 },
+	{ "bits",               TOKEN_BITS, 0 },
 	{ "default_modelindex", TOKEN_DEFAULT_MODELINDEX, 0 },
 	{ "default_frame",      TOKEN_DEFAULT_FRAME, 0 },
 	{ "default_colormap",   TOKEN_DEFAULT_COLORMAP, 0 },
 	{ "default_skin",       TOKEN_DEFAULT_SKIN, 0 },
 	{ "default_origin",     TOKEN_DEFAULT_ORIGIN, 0 },
 	{ "default_angles",     TOKEN_DEFAULT_ANGLES, 0 },
+	{ "default_alpha",      TOKEN_DEFAULT_ALPHA, 0 },
 	{ "entitytype",         TOKEN_ENTITYTYPE, 0 },
 	{ "trace_endpos",       TOKEN_TRACE_ENDPOS, 0 },
-	{ "range",		TOKEN_RANGE, 0 },
+	{ "range",		          TOKEN_RANGE, 0 },
 	{ "fromtrack",          TOKEN_FROMTRACK, 0 },
 	{ "totrack",            TOKEN_TOTRACK, 0 },
 	{ "modelindex",         TOKEN_MODELINDEX, 0 },
@@ -160,6 +167,13 @@ token_t DEM_token[]={
 	{ "origin_y",           TOKEN_ORIGIN_Y, 0 },
 	{ "origin_z",           TOKEN_ORIGIN_Z, 0 },
 	{ "new",                TOKEN_NEW, 0 },
+	{ "temp",               TOKEN_TEMP, 0 },
+	{ "alpha",              TOKEN_ALPHA, 0 },
+	{ "fullbright",         TOKEN_FULLBRIGHT, 0 },
+	{ "lmplabel",           TOKEN_LMPLABEL, 0 },
+	{ "picname",            TOKEN_PICNAME, 0 },
+	{ "x",                  TOKEN_X, 0 },
+	{ "y",                  TOKEN_Y, 0 },
 		
         { NULL, 0, 0}
 };
@@ -373,6 +387,16 @@ node* do_message_read_bin(BB_t* m)
     case c_sellscreen:       n=do_sellscreen_message_read_bin() ;        break;
     /* 0x22 */
     case c_cutscene:         n=do_cutscene_message_read_bin(m);          break;
+    /* 0x23 */
+    case c_showlmp:          n=do_showlmp_message_read_bin(m);           break;
+    /* 0x24 */
+    case c_hidelmp:          n=do_hidelmp_message_read_bin(m);           break;
+    /* 0x25 */
+    case c_skybox:           n=do_skybox_message_read_bin(m);            break;
+    /* 0x2A */
+    case c_spawnbaseline2:   n=do_spawnbaseline2_message_read_bin(m);    break;
+    /* 0x2B */
+    case c_spawnstatic2:     n=do_spawnstatic2_message_read_bin(m);      break;
     default: if (id>=0x80) 
                n=do_updateentity_message_read_bin(m,id & 0x7F);
              else 
@@ -1614,6 +1638,169 @@ node* do_cutscene_message_read_bin(BB_t* m)
                        H_SIMPLE);
 }
 
+/* 0x23 ----------------------------------------------------------------------*/
+node* do_showlmp_message_read_bin(BB_t* m)
+{
+  node *n;
+
+  /* variables */
+  long x;
+  long y;
+  char lmplabel[MAX_STRING_SIZE];
+  char picname[MAX_STRING_SIZE];
+
+  /* binary in */
+  ReadString(m, lmplabel);
+  ReadString(m, picname);
+  x = ReadByte(m);
+  y = ReadByte(m);
+
+  /* construct node tree and return the root of it */
+  n = node_command_init(TOKEN_LMPLABEL,V_STRING,H_STRING,NODE_VALUE_STRING_dup(lmplabel),0);
+  node_add_next(n,node_command_init(TOKEN_PICNAME,V_STRING,H_STRING,NODE_VALUE_STRING_dup(picname),0));
+  node_add_next(n,node_command_init(TOKEN_X,V_INT,H_BYTE,NODE_VALUE_INT_dup(x),0));
+  node_add_next(n,node_command_init(TOKEN_Y,V_INT,H_BYTE,NODE_VALUE_INT_dup(y),0));
+  return node_init_all(TOKEN_SHOWLMP,H_SIMPLE,n,0);
+}
+
+/* 0x24 ----------------------------------------------------------------------*/
+node* do_hidelmp_message_read_bin(BB_t* m)
+{
+  node *n;
+
+  /* variables */
+  char lmplabel[MAX_STRING_SIZE];
+
+  /* binary in */
+  ReadString(m, lmplabel);
+
+  /* construct node tree and return the root of it */
+  n = node_command_init(TOKEN_LMPLABEL,V_STRING,H_STRING,NODE_VALUE_STRING_dup(lmplabel),0);
+  return node_init_all(TOKEN_HIDELMP,H_SIMPLE,n,0);
+}
+
+/* 0x25 ----------------------------------------------------------------------*/
+node* do_skybox_message_read_bin(BB_t* m)
+{
+  /* variables */
+  char text[MAX_STRING_SIZE];
+
+  /* binary in */
+  ReadString(m, text);
+
+  /* construct node tree and return the root of it */
+  return node_add_hint(node_command_init(TOKEN_SKYBOX,V_STRING,H_STRING,NODE_VALUE_STRING_dup(text),0),
+                       H_SIMPLE);
+}
+
+#define B_LARGEMODEL		  (1<<0)	// modelindex is short instead of byte
+#define B_LARGEFRAME		  (1<<1)	// frame is short instead of byte
+#define B_ALPHA			      (1<<2)	// 1 byte, uses ENTALPHA_ENCODE, not sent if ENTALPHA_DEFAULT
+
+/* 0x2A ----------------------------------------------------------------------*/
+node* do_spawnbaseline2_message_read_bin(BB_t* m)
+{
+  node *n;
+
+  /* variables */
+  long entity;
+  long default_modelindex;
+  long default_frame;
+  long default_colormap;
+  long default_skin;
+  vec3_t default_origin;
+  vec3_t default_angles;
+  long default_alpha;
+
+  int i, bits;
+
+  /* binary in */
+  entity = ReadShort(m);
+  bits = ReadByte(m);
+  default_modelindex = (bits & B_LARGEMODEL) ? ReadShort(m) : ReadByte(m);
+  default_frame = (bits & B_LARGEFRAME) ? ReadShort(m) : ReadByte(m);
+  default_colormap = ReadByte(m);
+  default_skin = ReadByte(m);
+  for (i=0 ; i<3 ; i++) {
+    default_origin[i] = ReadCoord(m);
+    default_angles[i] = ReadAngle(m);
+  }
+  default_alpha = (bits & B_ALPHA) ? ReadByte(m) : 255;
+
+  /* construct node tree and return the root of it */
+  n = node_command_init(TOKEN_BITS,V_INT,H_BYTE,NODE_VALUE_INT_dup(bits),0);
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0));
+  if (default_modelindex >= 1 &&
+      default_modelindex <= DEMTOP->nummodels &&
+      DEMTOP->precache_models[default_modelindex][0]!='*') {
+    node_add_comment(n,NODE_VALUE_STRING_dup(DEMTOP->precache_models[default_modelindex]));
+  }
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_FRAME,V_INT,(bits & B_LARGEFRAME) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_frame),0));
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_COLORMAP,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_colormap),0));
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_SKIN,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_skin),0));
+  node_add_next(n,node_triple_command_init(TOKEN_DEFAULT_ORIGIN, V_FLOAT, H_COORD,
+                  NODE_VALUE_FLOAT_dup(default_origin[0]),
+                  NODE_VALUE_FLOAT_dup(default_origin[1]),
+                  NODE_VALUE_FLOAT_dup(default_origin[2]), 0));
+  node_add_next(n,node_triple_command_init(TOKEN_DEFAULT_ANGLES, V_FLOAT, H_ANGLE,
+                  NODE_VALUE_FLOAT_dup(default_angles[0]),
+                  NODE_VALUE_FLOAT_dup(default_angles[1]),
+                  NODE_VALUE_FLOAT_dup(default_angles[2]), 0));
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_ALPHA,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_alpha),0));
+  return node_init_all(TOKEN_SPAWNBASELINE2, H_DEM_SPAWNBASELINE2, n, 0);
+}
+
+/* 0x2B ----------------------------------------------------------------------*/
+node* do_spawnstatic2_message_read_bin(BB_t* m)
+{
+  node *n;
+
+  /* variables */
+  long default_modelindex;
+  long default_frame;
+  long default_colormap;
+  long default_skin;
+  vec3_t default_origin;
+  vec3_t default_angles;
+  long default_alpha;
+
+  int i, bits;
+
+  /* binary in */
+  bits = ReadByte(m);
+  default_modelindex = (bits & B_LARGEMODEL) ? ReadShort(m) : ReadByte(m);
+  default_frame = (bits & B_LARGEFRAME) ? ReadShort(m) : ReadByte(m);
+  default_colormap = ReadByte(m);
+  default_skin = ReadByte(m);
+  for (i=0 ; i<3 ; i++) {
+    default_origin[i] = ReadCoord(m);
+    default_angles[i] = ReadAngle(m);
+  }
+  default_alpha = (bits & B_ALPHA) ? ReadByte(m) : 255;
+
+  /* construct node tree and return the root of it */
+  n = node_command_init(TOKEN_BITS,V_INT,H_BYTE,NODE_VALUE_INT_dup(bits),0);
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0));
+  if (default_modelindex >= 1 &&
+      default_modelindex <= DEMTOP->nummodels &&
+      DEMTOP->precache_models[default_modelindex][0]!='*') {
+    node_add_comment(n,NODE_VALUE_STRING_dup(DEMTOP->precache_models[default_modelindex]));
+  }
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_FRAME,V_INT,(bits & B_LARGEFRAME) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_frame),0));
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_COLORMAP,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_colormap),0));
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_SKIN,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_skin),0));
+  node_add_next(n,node_triple_command_init(TOKEN_DEFAULT_ORIGIN, V_FLOAT, H_COORD,
+                  NODE_VALUE_FLOAT_dup(default_origin[0]),
+                  NODE_VALUE_FLOAT_dup(default_origin[1]),
+                  NODE_VALUE_FLOAT_dup(default_origin[2]), 0));
+  node_add_next(n,node_triple_command_init(TOKEN_DEFAULT_ANGLES, V_FLOAT, H_ANGLE,
+                  NODE_VALUE_FLOAT_dup(default_angles[0]),
+                  NODE_VALUE_FLOAT_dup(default_angles[1]),
+                  NODE_VALUE_FLOAT_dup(default_angles[2]), 0));
+  node_add_next(n,node_command_init(TOKEN_DEFAULT_ALPHA,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_alpha),0));
+  return node_init_all(TOKEN_SPAWNSTATIC2, H_DEM_SPAWNSTATIC2, n, 0);
+}
+
 /* >= 0x80 -------------------------------------------------------------------*/
 node* do_updateentity_message_read_bin(BB_t* m, long mask)
 {
@@ -1629,6 +1816,7 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
   vec3_t origin;
   vec3_t angles;
   long new_;
+  float temp, alpha, fullbright;
 
   /* init */
   origin[0]=origin[1]=origin[2]=angles[0]=angles[1]=angles[2]=0.0;
@@ -1648,6 +1836,11 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
   origin[2] = mask & 0x0008 ? ReadCoord(m) : 0;
   angles[2] = mask & 0x0200 ? ReadAngle(m) : 0;
   new_ = mask & 0x0020 ? 1 : 0;
+  if (mask & 0x8000) {
+    temp = ReadFloat(m);
+    alpha = ReadFloat(m);
+    if (temp == 2) fullbright = ReadFloat(m);
+  }
 
   /* construct node tree and return the root of it */
   n=node_command_init(TOKEN_ENTITY,V_INT,H_SHORT,NODE_VALUE_INT_dup(entity),0);
@@ -1692,6 +1885,11 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
   }
   if (new_) {
     node_add_next(n,node_init_all(TOKEN_NEW,H_SIMPLE,NULL,0));
+  }
+  if (mask&0x8000) { 
+    node_add_next(n,node_command_init(TOKEN_TEMP,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(temp),0));
+    node_add_next(n,node_command_init(TOKEN_ALPHA,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(alpha),0));
+    if (temp == 2) node_add_next(n,node_command_init(TOKEN_FULLBRIGHT,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(fullbright),0));
   }
   return node_init_all(TOKEN_UPDATEENTITY,H_DEM_UPDATEENTITY,n,0);
 }
@@ -1786,6 +1984,9 @@ node* DEM_block_write_bin(node* b)
             break;
             case H_DEM_UPDATEENTITY:
               do_dem_updateentity_message_write_bin(tn,&m);		
+            break;
+            case H_DEM_SPAWNSTATIC2:
+              do_dem_spawnstatic2_message_write_bin(tn,&m);		
             break;
             default: /* this creates a bad message */
               *m.p='\0';
@@ -2296,6 +2497,7 @@ void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
   long mask;
   float origin_x, origin_y, origin_z;
   float angles_1, angles_2, angles_3;
+  float temp, alpha, fullbright;
   short entity;
 
   /*
@@ -2323,6 +2525,7 @@ void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
       case TOKEN_ANGLES_2:     mask |= 0x0010; break;
       case TOKEN_ANGLES_3:     mask |= 0x0200; break;
       case TOKEN_NEW:          mask |= 0x0020; break;
+      case TOKEN_TEMP:         mask |= 0x8000; break;
     }
   }
   c=n->down;
@@ -2397,7 +2600,111 @@ void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
   if (mask&0x0008) WriteCoord(m,origin_z);
   if (mask&0x0200) WriteAngle(m,angles_3);
 
+  if (mask&0x8000) {
+    temp = *(float*)c->down->down;
+    c=c->next;
+    WriteFloat(m,temp);
+
+    alpha = *(float*)c->down->down;
+    c=c->next;
+    WriteFloat(m,alpha);
+
+    if (temp == 2.0f) {
+      fullbright = *(float*)c->down->down;
+      c=c->next;
+      WriteFloat(m,fullbright);
+    }
+  }
+
   /* Here may come a new command. It is in the bit mask already */ 
+}
+
+void do_dem_spawnstatic2_message_write_bin(node* n, BB_t* m)
+{
+  node* c;
+  node* c2;
+  node* a;
+  node* a2;
+  char ts[1000];
+  int bits;
+
+  /*
+    I don't do any kind of check in here. If the internal structure is
+    corrupt this gives a total crash.
+
+    spawnstatic is very easy: all commands have to be there
+  */
+
+  /* fprintf(stderr,"s"); */
+  /* at first: the message id */
+  WriteByte(m,node_token_id(n->type));
+
+  /* message -> commands */
+  c=n->down; /* bits */
+  if (c->type!=TOKEN_BITS) {
+    syntaxerror(c->pos,"bits expected");
+  }
+  do_simple_argument_write_bin(c->down,m);
+  a=c->down;
+  bits = *(long*)a->down;
+
+  c=c->next; /* default_modelindex */
+  if (c==NULL) syntaxerror(n->pos, "command default_modelindex missing");
+  if (c->type!=TOKEN_DEFAULT_MODELINDEX) {
+    sprintf(ts, "command is %s, should be %s", 
+                 node_token_string(c->type), 
+                 node_token_string(TOKEN_DEFAULT_MODELINDEX));
+    syntaxerror(c->pos, ts);
+  }
+  //do_simple_argument_write_bin(c->down,m);
+  a=c->down;
+  if (bits & B_LARGEMODEL) 
+    WriteShort(m,*(long*)a->down);
+  else
+    WriteByte(m,*(long*)a->down);
+
+  c=c->next; /* default_frame */
+  if (c->type!=TOKEN_DEFAULT_FRAME) {
+    syntaxerror(c->pos,"default_frame expected");
+  }
+  //do_simple_argument_write_bin(c->down,m);
+  a=c->down;
+  if (bits & B_LARGEFRAME) 
+    WriteShort(m,*(long*)a->down);
+  else 
+    WriteByte(m,*(long*)a->down);
+
+  c=c->next; /* default_colormap */
+  if (c->type!=TOKEN_DEFAULT_COLORMAP) {
+    syntaxerror(c->pos,"default_colormap expected");
+  }
+  do_simple_argument_write_bin(c->down,m);
+
+  c=c->next; /* default_skin */
+  if (c->type!=TOKEN_DEFAULT_SKIN) {
+    syntaxerror(c->pos,"default_skin expected");
+  } 
+  do_simple_argument_write_bin(c->down,m);
+
+  c=c->next; /* default_origin */
+  c2=c->next; /* default_angles */
+
+  /* default_origin and default_angles are combined */
+  a=c->down;
+  a2=c2->down;
+
+  do_simple_argument_write_bin(a, m); a=a->next;
+  do_simple_argument_write_bin(a2,m); a2=a2->next;
+  do_simple_argument_write_bin(a, m); a=a->next;
+  do_simple_argument_write_bin(a2,m); a2=a2->next;
+  do_simple_argument_write_bin(a, m);
+  do_simple_argument_write_bin(a2,m);
+
+  c=c2->next; /* default_alpha */
+  if (c->type!=TOKEN_DEFAULT_ALPHA) {
+    syntaxerror(c->pos,"default_alpha expected");
+  } 
+  if (bits & B_ALPHA) do_simple_argument_write_bin(c->down,m);
 }
 
 /******************************************************************************/

@@ -44,6 +44,8 @@
 #define H_DEM_SPAWNSTATIC	( H_DEM_HINT | 5 )
 #define H_DEM_SPAWNBASELINE	( H_DEM_HINT | 6 )
 #define H_DEM_UPDATEENTITY	( H_DEM_HINT | 7 )
+#define H_DEM_SPAWNSTATIC2	( H_DEM_HINT | 8 )
+#define H_DEM_SPAWNBASELINE2	( H_DEM_HINT | 9 )
 
 
 #include "node.h"
@@ -158,6 +160,16 @@ extern node* do_cdtrack_message_read_bin(BB_t* m);
 extern node* do_sellscreen_message_read_bin(void);
 #define     c_cutscene         0x22
 extern node* do_cutscene_message_read_bin(BB_t* m);
+#define     c_showlmp          0x23
+extern node* do_showlmp_message_read_bin(BB_t* m);
+#define     c_hidelmp          0x24
+extern node* do_hidelmp_message_read_bin(BB_t* m);
+#define     c_skybox           0x25
+extern node* do_skybox_message_read_bin(BB_t* m);
+#define     c_spawnbaseline2   0x2A
+extern node* do_spawnbaseline2_message_read_bin(BB_t* m);
+#define     c_spawnstatic2     0x2B
+extern node* do_spawnstatic2_message_read_bin(BB_t* m);
 
 extern node* do_updateentity_message_read_bin(BB_t* m, long mask);
 

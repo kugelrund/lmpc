@@ -263,7 +263,8 @@ dem_message: m_unknown  { $$=$1; }
 		| dem_m_cdtrack { $$=$1; }
 		| m_sellscreen { $$=$1; }
 		| m_cutscene { $$=$1; }
-		| m_updateentity { $$=$1; };
+		| m_updateentity { $$=$1; }
+		| dem_m_spawnstatic2 { $$=$1; };
 
 qwd_sgamemessage: m_unknown
 		| m_bad
@@ -930,6 +931,22 @@ dem_m_spawnstatic: TOKEN_SPAWNSTATIC '{' mcs_spawnstatic '}' {
 			reorder_commands($$,spawnstatic_cs, arraylength(spawnstatic_cs));
 		};
 
+dem_m_spawnstatic2: TOKEN_SPAWNSTATIC2 '{' mcs_spawnstatic2 '}' {
+			CO_t spawnstatic2_cs[] = {
+			  { TOKEN_BITS,               1 },
+			  { TOKEN_DEFAULT_MODELINDEX, 1 },
+			  { TOKEN_DEFAULT_FRAME,      1 }, 
+			  { TOKEN_DEFAULT_COLORMAP,   1 }, 
+			  { TOKEN_DEFAULT_SKIN,       1 }, 
+			  { TOKEN_DEFAULT_ORIGIN,     1 }, 
+			  { TOKEN_DEFAULT_ANGLES,     1 },
+			  { TOKEN_DEFAULT_ALPHA,      1 }
+			};
+			$$=node_add_down($1,$3);
+			$$->hint = H_DEM_SPAWNSTATIC2; 
+			reorder_commands($$,spawnstatic2_cs, arraylength(spawnstatic2_cs));
+		};
+
 qwd_m_spawnstatic: TOKEN_SPAWNSTATIC '{' mcs_spawnstatic '}' {
 			CO_t spawnstatic_cs[] = {
 			  { TOKEN_DEFAULT_MODELINDEX, 1 },
@@ -957,6 +974,22 @@ mc_spawnstatic: c_default_modelindex { $$=$1; }
 		| c_default_skin { $$=$1; }
 		| c_default_origin { $$=$1; }
 		| c_default_angles { $$=$1; };
+
+mcs_spawnstatic2: mc_spawnstatic2 {
+			$$=$1;
+		}
+		| mcs_spawnstatic2 mc_spawnstatic2 {
+			$$=node_add_next($1,$2);
+		};
+
+mc_spawnstatic2: c_bits { $$=$1; }
+		| c_default_modelindex { $$=$1; }
+		| c_default_frame { $$=$1; }
+		| c_default_colormap { $$=$1; }
+		| c_default_skin { $$=$1; }
+		| c_default_origin { $$=$1; }
+		| c_default_angles { $$=$1; }
+		| c_default_alpha { $$=$1; };
 
 m_spawnbinary: TOKEN_SPAWNBINARY ';' {
 			$$=$1;
@@ -1449,7 +1482,10 @@ m_updateentity: TOKEN_UPDATEENTITY '{' mcs_updateentity '}' {
 			  { TOKEN_ANGLES_1,     0 },
 			  { TOKEN_ANGLES_2,     0 },
 			  { TOKEN_ANGLES_3,     0 },
-			  { TOKEN_NEW,          0 }
+			  { TOKEN_NEW,          0 },
+			  { TOKEN_TEMP,         0 },
+			  { TOKEN_ALPHA,        0 },
+			  { TOKEN_FULLBRIGHT,   0 }
 			};
 			$$=$1;
 			node_add_down($$,$3);
@@ -1477,8 +1513,10 @@ mc_updateentity: c_entity { $$=$1; }
 		| c_angles_1 { $$=$1; }
 		| c_angles_2 { $$=$1; }
 		| c_angles_3 { $$=$1; }
-		| c_new { $$=$1; };
-
+		| c_new { $$=$1; }
+		| c_temp { $$=$1; }
+		| c_alpha { $$=$1; }
+		| c_fullbright { $$=$1; };
 
 dm2_m_deltapacketentities: TOKEN_DELTAPACKETENTITIES '{' c_data '}' {
 			$$=node_add_down($1,$3);
@@ -2265,6 +2303,11 @@ c_take: TOKEN_TAKE v_int ';' {
 			$$=node_add_down($1,$2);
 		};
 
+c_bits: TOKEN_BITS v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
 c_default_modelindex: TOKEN_DEFAULT_MODELINDEX v_int ';' {
 			$2->hint = H_BYTE;
 			$$=node_add_down($1,$2);
@@ -2296,6 +2339,11 @@ c_default_angles: TOKEN_DEFAULT_ANGLES floatvector ';' {
 			$2->hint = H_ANGLE;
 			$2->next->hint = H_ANGLE;
 			$2->next->next->hint = H_ANGLE;
+			$$=node_add_down($1,$2);
+		};
+
+c_default_alpha: TOKEN_DEFAULT_ALPHA v_int ';' {
+			$2->hint = H_BYTE;
 			$$=node_add_down($1,$2);
 		};
 
@@ -2436,6 +2484,21 @@ c_origin_z: TOKEN_ORIGIN_Z v_float ';' {
 
 c_new: TOKEN_NEW ';' {
 			$$=$1;
+		};
+
+c_temp: TOKEN_TEMP v_float ';' {
+			$2->hint = H_FLOAT;
+			$$=node_add_down($1,$2);
+		};
+
+c_alpha: TOKEN_ALPHA v_float ';' {
+			$2->hint = H_FLOAT;
+			$$=node_add_down($1,$2);
+		};
+
+c_fullbright: TOKEN_FULLBRIGHT v_float ';' {
+			$2->hint = H_FLOAT;
+			$$=node_add_down($1,$2);
 		};
 
 c_level: TOKEN_LEVEL v_int ';' {
