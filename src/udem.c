@@ -82,8 +82,9 @@ token_t DEM_token[]={
 	{ "showlmp",		        TOKEN_SHOWLMP, c_showlmp },
 	{ "hidelmp",		        TOKEN_HIDELMP, c_hidelmp },
 	{ "skybox",			        TOKEN_SKYBOX, c_skybox },
-	{ "spawnstatic2",       TOKEN_SPAWNSTATIC2, c_spawnstatic2 },
 	{ "spawnbaseline2",     TOKEN_SPAWNBASELINE2, c_spawnbaseline2 },
+	{ "spawnstatic2",       TOKEN_SPAWNSTATIC2, c_spawnstatic2 },
+	{ "spawnstaticsound2",  TOKEN_SPAWNSTATICSOUND2, c_spawnstaticsound2 },
 	{ "updateentity",       TOKEN_UPDATEENTITY, 0 },
 
 	{ "id",                 TOKEN_ID, 0 },
@@ -168,12 +169,17 @@ token_t DEM_token[]={
 	{ "origin_z",           TOKEN_ORIGIN_Z, 0 },
 	{ "new",                TOKEN_NEW, 0 },
 	{ "temp",               TOKEN_TEMP, 0 },
-	{ "alpha",              TOKEN_ALPHA, 0 },
+	{ "trans",              TOKEN_TRANS, 0 },
 	{ "fullbright",         TOKEN_FULLBRIGHT, 0 },
 	{ "lmplabel",           TOKEN_LMPLABEL, 0 },
 	{ "picname",            TOKEN_PICNAME, 0 },
 	{ "x",                  TOKEN_X, 0 },
 	{ "y",                  TOKEN_Y, 0 },
+	{ "alpha",              TOKEN_ALPHA, 0 },
+	{ "scale",              TOKEN_SCALE, 0 },
+	{ "frame2",             TOKEN_FRAME2, 0 },
+	{ "modelindex2",        TOKEN_MODELINDEX2, 0 },
+	{ "lerpfinish",         TOKEN_LERPFINISH, 0 },
 		
         { NULL, 0, 0}
 };
@@ -397,6 +403,8 @@ node* do_message_read_bin(BB_t* m)
     case c_spawnbaseline2:   n=do_spawnbaseline2_message_read_bin(m);    break;
     /* 0x2B */
     case c_spawnstatic2:     n=do_spawnstatic2_message_read_bin(m);      break;
+    /* 0x2C */
+    case c_spawnstaticsound2: n=do_spawnstaticsound2_message_read_bin(m); break;
     default: if (id>=0x80) 
                n=do_updateentity_message_read_bin(m,id & 0x7F);
              else 
@@ -646,6 +654,9 @@ node* do_setview_message_read_bin(BB_t* m)
 
 #define DEMTOP ((DEM_t*)(m->top))
 
+#define	SND_LARGEENTITY	(1<<3)	// a short + byte (instead of just a short)
+#define	SND_LARGESOUND	(1<<4)	// a short soundindex (instead of a byte)
+
 /* 0x06 ----------------------------------------------------------------------*/
 node* do_sound_message_read_bin(BB_t* m)
 {
@@ -671,10 +682,21 @@ node* do_sound_message_read_bin(BB_t* m)
   mask = ReadByte(m);
   if (mask & 0x01) vol = (float) ReadByte(m) / 255.0;
   if (mask & 0x02) attenuation = (float) ReadByte(m) / 64.0;
-  entity_channel = ReadShort(m);
-  channel = entity_channel & 0x07;
-  entity = (entity_channel >> 3) & 0x1FFF;
-  soundnum = ReadByte(m);
+  if (mask & SND_LARGEENTITY) {
+    entity = ReadShort(m);
+    channel = ReadByte(m);
+  }
+  else {
+    entity_channel = ReadShort(m);
+    channel = entity_channel & 0x07;
+    entity = (entity_channel >> 3) & 0x1FFF;
+  }
+  if (mask & SND_LARGESOUND) {
+    soundnum = ReadShort(m);
+  }
+  else {
+    soundnum = ReadByte(m);
+  }
   for (i=0 ; i<3 ; i++) origin[i] = ReadCoord(m);
 
   /* construct node tree and return the root of it */
@@ -687,7 +709,7 @@ node* do_sound_message_read_bin(BB_t* m)
   }
   n=node_link(n,node_command_init(TOKEN_CHANNEL,V_INT,0,NODE_VALUE_INT_dup(channel),0));
   n=node_link(n,node_command_init(TOKEN_ENTITY,V_INT,0,NODE_VALUE_INT_dup(entity),0));
-  tn = node_command_init(TOKEN_SOUNDNUM,V_INT,H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
+  tn = node_command_init(TOKEN_SOUNDNUM,V_INT,mask & SND_LARGESOUND ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
   if (soundnum >= 1 && 
       soundnum <= DEMTOP->numsounds) {
     node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_sounds[soundnum]));
@@ -763,6 +785,9 @@ node* do_setangle_message_read_bin(BB_t* m)
   return node_init_all(TOKEN_SETANGLE,H_SIMPLE,tn[0],0);
 }
 
+// must be declared as global, we need to check it when reading updateentity
+long serverversion;
+
 /* 0x0B ----------------------------------------------------------------------*/ 
 node* do_serverinfo_message_read_bin(BB_t* m)
 {
@@ -772,7 +797,6 @@ node* do_serverinfo_message_read_bin(BB_t* m)
   char buf[MAX_STRING_SIZE];
 
   /* variables */
-  long serverversion;
   long maxclients;
   long multi;
   char mapname[MAX_STRING_SIZE];
@@ -1700,7 +1724,7 @@ node* do_skybox_message_read_bin(BB_t* m)
 /* 0x2A ----------------------------------------------------------------------*/
 node* do_spawnbaseline2_message_read_bin(BB_t* m)
 {
-  node *n;
+  node *n, *tn;
 
   /* variables */
   long entity;
@@ -1728,13 +1752,15 @@ node* do_spawnbaseline2_message_read_bin(BB_t* m)
   default_alpha = (bits & B_ALPHA) ? ReadByte(m) : 255;
 
   /* construct node tree and return the root of it */
-  n = node_command_init(TOKEN_BITS,V_INT,H_BYTE,NODE_VALUE_INT_dup(bits),0);
-  node_add_next(n,node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0));
+  n = node_command_init(TOKEN_ENTITY,V_INT,H_SHORT,NODE_VALUE_INT_dup(entity),0);
+  node_add_next(n,node_command_init(TOKEN_BITS,V_INT,H_BYTE,NODE_VALUE_INT_dup(bits),0));
+  tn = node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0);
   if (default_modelindex >= 1 &&
       default_modelindex <= DEMTOP->nummodels &&
       DEMTOP->precache_models[default_modelindex][0]!='*') {
-    node_add_comment(n,NODE_VALUE_STRING_dup(DEMTOP->precache_models[default_modelindex]));
+    node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_models[default_modelindex]));
   }
+  node_add_next(n,tn);
   node_add_next(n,node_command_init(TOKEN_DEFAULT_FRAME,V_INT,(bits & B_LARGEFRAME) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_frame),0));
   node_add_next(n,node_command_init(TOKEN_DEFAULT_COLORMAP,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_colormap),0));
   node_add_next(n,node_command_init(TOKEN_DEFAULT_SKIN,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_skin),0));
@@ -1753,7 +1779,7 @@ node* do_spawnbaseline2_message_read_bin(BB_t* m)
 /* 0x2B ----------------------------------------------------------------------*/
 node* do_spawnstatic2_message_read_bin(BB_t* m)
 {
-  node *n;
+  node *n, *tn;
 
   /* variables */
   long default_modelindex;
@@ -1780,12 +1806,13 @@ node* do_spawnstatic2_message_read_bin(BB_t* m)
 
   /* construct node tree and return the root of it */
   n = node_command_init(TOKEN_BITS,V_INT,H_BYTE,NODE_VALUE_INT_dup(bits),0);
-  node_add_next(n,node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0));
+  tn = node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0);
   if (default_modelindex >= 1 &&
       default_modelindex <= DEMTOP->nummodels &&
       DEMTOP->precache_models[default_modelindex][0]!='*') {
-    node_add_comment(n,NODE_VALUE_STRING_dup(DEMTOP->precache_models[default_modelindex]));
+    node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_models[default_modelindex]));
   }
+  node_add_next(n,tn);
   node_add_next(n,node_command_init(TOKEN_DEFAULT_FRAME,V_INT,(bits & B_LARGEFRAME) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_frame),0));
   node_add_next(n,node_command_init(TOKEN_DEFAULT_COLORMAP,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_colormap),0));
   node_add_next(n,node_command_init(TOKEN_DEFAULT_SKIN,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_skin),0));
@@ -1800,6 +1827,53 @@ node* do_spawnstatic2_message_read_bin(BB_t* m)
   node_add_next(n,node_command_init(TOKEN_DEFAULT_ALPHA,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_alpha),0));
   return node_init_all(TOKEN_SPAWNSTATIC2, H_DEM_SPAWNSTATIC2, n, 0);
 }
+
+/* 0x2C ----------------------------------------------------------------------*/
+node* do_spawnstaticsound2_message_read_bin(BB_t* m)
+{
+  node *n, *tn;
+
+  /* variables */
+  vec3_t origin;
+  long soundnum;
+  float vol;
+  float attenuation;
+
+  int i;
+
+  /* binary in */
+  for (i=0 ; i<3 ; i++) origin[i] = ReadCoord(m);
+  soundnum = ReadShort(m);
+  vol = (float)ReadByte(m) / 255.0;
+  attenuation = (float)ReadByte(m) / 64.0;
+
+  /* construct node tree and return the root of it */
+  n = node_triple_command_init(TOKEN_ORIGIN,V_FLOAT,H_COORD,
+      NODE_VALUE_FLOAT_dup(origin[0]),NODE_VALUE_FLOAT_dup(origin[1]),NODE_VALUE_FLOAT_dup(origin[2]),0);
+  tn = node_command_init(TOKEN_SOUNDNUM,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0);
+  if (soundnum >= 1 &&
+      soundnum <= DEMTOP->numsounds) {
+    node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_sounds[soundnum]));
+  }
+  node_add_next(n,tn);
+  node_add_next(n,node_command_init(TOKEN_VOL,V_FLOAT,H_VOL,NODE_VALUE_FLOAT_dup(vol),0));
+  node_add_next(n,node_command_init(TOKEN_ATTENUATION,V_FLOAT,H_ATTENUATION,NODE_VALUE_FLOAT_dup(attenuation),0));
+  return node_init_all(TOKEN_SPAWNSTATICSOUND2,H_SIMPLE,n,0);
+}
+
+#define	PROTOCOL_NETQUAKE	  15	//johnfitz -- standard quake protocol
+#define PROTOCOL_FITZQUAKE	666 //johnfitz -- added new protocol for fitzquake 0.85
+
+#define	U_TRANS		    (1<<15)
+#define U_EXTEND1		  (1<<15)
+#define U_ALPHA			  (1<<16) // 1 byte, uses ENTALPHA_ENCODE, not sent if equal to baseline
+#define U_FRAME2		  (1<<17) // 1 byte, this is .frame & 0xFF00 (second byte)
+#define U_MODEL2		  (1<<18) // 1 byte, this is .modelindex & 0xFF00 (second byte)
+#define U_LERPFINISH	(1<<19) // 1 byte, 0.0-1.0 maps to 0-255, not sent if exactly 0.1, this is ent->v.nextthink - sv.time, used for lerping
+#define U_SCALE			  (1<<20) // 1 byte, for PROTOCOL_RMQ PRFL_EDICTSCALE, currently read but ignored
+#define U_UNUSED21		(1<<21)
+#define U_UNUSED22		(1<<22)
+#define U_EXTEND2		  (1<<23) // another byte to follow, future expansion
 
 /* >= 0x80 -------------------------------------------------------------------*/
 node* do_updateentity_message_read_bin(BB_t* m, long mask)
@@ -1816,13 +1890,19 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
   vec3_t origin;
   vec3_t angles;
   long new_;
-  float temp, alpha, fullbright;
+  float temp, trans, fullbright;
+  long alpha, scale, frame2, modelindex2;
+  long lerpfinish;
 
   /* init */
   origin[0]=origin[1]=origin[2]=angles[0]=angles[1]=angles[2]=0.0;
 
   /* binary in */
   if (mask & 0x0001) mask |= (ReadByte(m)) << 8;
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask & U_EXTEND1) mask |= (ReadByte(m)) << 16;
+    if (mask & U_EXTEND2) mask |= (ReadByte(m)) << 24;
+  }
   entity = mask & 0x4000 ? ReadShort(m) : ReadByte(m);
   modelindex = mask & 0x0400 ? ReadByte(m) : 0;
   frame = mask & 0x0040 ? ReadByte(m) : 0;
@@ -1836,10 +1916,19 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
   origin[2] = mask & 0x0008 ? ReadCoord(m) : 0;
   angles[2] = mask & 0x0200 ? ReadAngle(m) : 0;
   new_ = mask & 0x0020 ? 1 : 0;
-  if (mask & 0x8000) {
-    temp = ReadFloat(m);
-    alpha = ReadFloat(m);
-    if (temp == 2) fullbright = ReadFloat(m);
+  if (serverversion == PROTOCOL_NETQUAKE) {
+    if (mask & U_TRANS) {
+      temp = ReadFloat(m);
+      trans = ReadFloat(m);
+      if (temp == 2) fullbright = ReadFloat(m);
+    }
+  }
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    alpha = mask & U_ALPHA ? ReadByte(m) : 0;
+    scale = mask & U_SCALE ? ReadByte(m) : 0;
+    frame2 = mask & U_FRAME2 ? ReadByte(m) : 0;
+    modelindex2 = mask & U_MODEL2 ? ReadByte(m) : 0;
+    lerpfinish = mask & U_LERPFINISH ? ReadByte(m) : 0;
   }
 
   /* construct node tree and return the root of it */
@@ -1865,31 +1954,56 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
   if (mask & 0x2000) {
     node_add_next(n,node_command_init(TOKEN_EFFECTS,V_INT,H_BYTE,NODE_VALUE_INT_dup(effects),0));
   }
-  if (mask&0x0002) { 
+  if (mask & 0x0002) { 
     node_add_next(n,node_command_init(TOKEN_ORIGIN_X,V_FLOAT,H_COORD,NODE_VALUE_FLOAT_dup(origin[0]),0));
   }
-  if (mask&0x0004) { 
+  if (mask & 0x0004) { 
     node_add_next(n,node_command_init(TOKEN_ORIGIN_Y,V_FLOAT,H_COORD,NODE_VALUE_FLOAT_dup(origin[1]),0));
   }
-  if (mask&0x0008) { 
+  if (mask & 0x0008) { 
     node_add_next(n,node_command_init(TOKEN_ORIGIN_Z,V_FLOAT,H_COORD,NODE_VALUE_FLOAT_dup(origin[2]),0));
   }
-  if (mask&0x0100) { 
+  if (mask & 0x0100) { 
     node_add_next(n,node_command_init(TOKEN_ANGLES_1,V_FLOAT,H_ANGLE,NODE_VALUE_FLOAT_dup(angles[0]),0));
   }
-  if (mask&0x0010) { 
+  if (mask & 0x0010) { 
     node_add_next(n,node_command_init(TOKEN_ANGLES_2,V_FLOAT,H_ANGLE,NODE_VALUE_FLOAT_dup(angles[1]),0));
   }
-  if (mask&0x0200) { 
+  if (mask & 0x0200) { 
     node_add_next(n,node_command_init(TOKEN_ANGLES_3,V_FLOAT,H_ANGLE,NODE_VALUE_FLOAT_dup(angles[2]),0));
   }
   if (new_) {
     node_add_next(n,node_init_all(TOKEN_NEW,H_SIMPLE,NULL,0));
   }
-  if (mask&0x8000) { 
-    node_add_next(n,node_command_init(TOKEN_TEMP,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(temp),0));
-    node_add_next(n,node_command_init(TOKEN_ALPHA,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(alpha),0));
-    if (temp == 2) node_add_next(n,node_command_init(TOKEN_FULLBRIGHT,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(fullbright),0));
+  if (serverversion == PROTOCOL_NETQUAKE) {
+    if (mask & U_TRANS) { 
+      node_add_next(n,node_command_init(TOKEN_TEMP,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(temp),0));
+      node_add_next(n,node_command_init(TOKEN_TRANS,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(trans),0));
+      if (temp == 2) node_add_next(n,node_command_init(TOKEN_FULLBRIGHT,V_FLOAT,H_FLOAT,NODE_VALUE_FLOAT_dup(fullbright),0));
+    }
+  }
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask & U_ALPHA) { 
+      node_add_next(n,node_command_init(TOKEN_ALPHA,V_INT,H_BYTE,NODE_VALUE_INT_dup(alpha),0));
+    }
+    if (mask & U_SCALE) { 
+      node_add_next(n,node_command_init(TOKEN_SCALE,V_INT,H_BYTE,NODE_VALUE_INT_dup(scale),0));
+    }
+    if (mask & U_FRAME2) {
+      node_add_next(n,node_command_init(TOKEN_FRAME2,V_INT,H_BYTE,NODE_VALUE_INT_dup(frame2),0));
+    }
+    if (mask & U_MODEL2) {
+      tn=node_command_init(TOKEN_MODELINDEX2,V_INT,H_BYTE,NODE_VALUE_INT_dup(modelindex2),0);
+      if (modelindex2>=1 && 
+          modelindex2<=DEMTOP->nummodels &&
+          DEMTOP->precache_models[modelindex2][0]!='*') {
+        node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_models[modelindex2]));
+      }
+      node_add_next(n,tn);
+    }
+    if (mask & U_LERPFINISH) { 
+      node_add_next(n,node_command_init(TOKEN_LERPFINISH,V_INT,H_BYTE,NODE_VALUE_INT_dup(lerpfinish),0));
+    }
   }
   return node_init_all(TOKEN_UPDATEENTITY,H_DEM_UPDATEENTITY,n,0);
 }
@@ -1959,6 +2073,10 @@ node* DEM_block_write_bin(node* b)
             case H_NOTHING:
             break;
             case H_SIMPLE: 
+              if (tn->down != NULL && tn->down->type == TOKEN_SERVERVERSION) {
+                serverversion = *(long*)tn->down->down->down;
+                fprintf(stderr, "found serverversion: %ld\n", serverversion);
+              }
               do_simple_message_write_bin(tn,&m);
             break;
             case H_UNKNOWN:
@@ -1987,6 +2105,9 @@ node* DEM_block_write_bin(node* b)
             break;
             case H_DEM_SPAWNSTATIC2:
               do_dem_spawnstatic2_message_write_bin(tn,&m);		
+            break;
+            case H_DEM_SPAWNBASELINE2:
+              do_dem_spawnbaseline2_message_write_bin(tn,&m);		
             break;
             default: /* this creates a bad message */
               *m.p='\0';
@@ -2023,6 +2144,7 @@ void do_dem_sound_message_write_bin(node* n, BB_t* m)
   node* a;
   unsigned char mask;
   long entity_channel;
+  long entity = 0, channel = 0, soundnum = 0;
   
   /*
     I don't do any kind of check in here. If the internal structure is
@@ -2040,31 +2162,59 @@ void do_dem_sound_message_write_bin(node* n, BB_t* m)
   c=n->down; /* 1st command: vol, attenuation, channel */
   if (c->type==TOKEN_VOL) mask|=0x01;
   if (c->type==TOKEN_ATTENUATION) mask|=0x02;
+  if (c->type==TOKEN_CHANNEL) goto done;
   c=c->next; /* 2nd command: attenuation, channel */
   if (c->type==TOKEN_ATTENUATION) mask|=0x02;
+  if (c->type==TOKEN_CHANNEL) goto done;
+  c=c->next; /* 3rd command: channel */
+done:
+  if (c->type==TOKEN_CHANNEL) {
+    a=c->down; /* argument */
+    channel = (*(long*)a->down) & 0x07;
+  }
+  c=c->next; /* 4th command: entity */
+  if (c->type==TOKEN_ENTITY) {
+    a=c->down; /* argument */
+    entity = (*(long*)(a->down)) & 0x1FFF;
+  }
+  if (entity >= 8192 || channel >= 8) {
+    mask|=SND_LARGEENTITY;
+  }
+  c=c->next; /* 5th command: soundnum */
+  if (c->type==TOKEN_SOUNDNUM) {
+    a=c->down; /* argument */
+    soundnum = *(long*)a->down;
+  }
+  if (soundnum >= 256) {
+     mask |= SND_LARGESOUND;
+  }
 
   /* now output */
   WriteByte(m,mask);
   c=n->down; /* c may be vol, attenuation or channel */
-  if (mask&0x01) { /* vol */
+  if (mask & 0x01) { /* vol */
     do_simple_argument_write_bin(c->down,m);
     c=c->next;
   }
   /* c may be attenuation or channel */
-  if (mask&0x02) { /* attenuation */
+  if (mask & 0x02) { /* attenuation */
     do_simple_argument_write_bin(c->down,m);
     c=c->next;
   }
   /* c is now channel */
-  a=c->down; /* argument */
-  entity_channel = (*(long*)a->down) & 0x07;
   c=c->next; /* entity */
-  a=c->down; /* argument */
-  entity_channel |= ((*(long*)(a->down)) & 0x1FFF ) << 3;
-  WriteShort(m,entity_channel);
+  if (mask & SND_LARGEENTITY) {
+    WriteShort(m,entity);
+    WriteByte(m,channel);
+  }
+  else
+    WriteShort(m,(entity << 3) | channel);
 
   c=c->next; /* soundnum */
-  do_simple_argument_write_bin(c->down,m);
+  if (mask & SND_LARGESOUND)
+    WriteShort(m,soundnum);
+  else
+    WriteByte(m,soundnum);
 
   c=c->next; /* origin */
   do_simple_arguments_write_bin(c->down,m); /* plural s */
@@ -2525,9 +2675,17 @@ void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
       case TOKEN_ANGLES_2:     mask |= 0x0010; break;
       case TOKEN_ANGLES_3:     mask |= 0x0200; break;
       case TOKEN_NEW:          mask |= 0x0020; break;
-      case TOKEN_TEMP:         mask |= 0x8000; break;
+      case TOKEN_TEMP:         mask |= U_TRANS; break;
+      case TOKEN_ALPHA:        mask |= U_ALPHA; break;
+      case TOKEN_SCALE:        mask |= U_SCALE; break;
+      case TOKEN_FRAME2:       mask |= U_FRAME2; break;
+      case TOKEN_MODELINDEX2:  mask |= U_MODEL2; break;
+      case TOKEN_LERPFINISH:   mask |= U_LERPFINISH; break;
     }
   }
+  if (mask>0xFFFF) mask |= U_EXTEND1;
+  if (mask>0xFFFFFF) mask |= U_EXTEND2;
+
   c=n->down;
   entity = (short)(*(long*)c->down->down);
   if (entity>0xFF) mask |= 0x4000;
@@ -2538,6 +2696,10 @@ void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
   WriteByte (m, (mask&0x7F) | 0x80);
   /* mask */
   if (mask & 0x0001) WriteByte(m,(mask>>8)&0xFF);
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask & U_EXTEND1) WriteByte(m,(mask>>16)&0xFFFF);
+    if (mask & U_EXTEND2) WriteByte(m,(mask>>24)&0xFFFFFF);
+  }
 
   if (entity>0xFF) {
     do_simple_argument_write_bin(c->down, m);
@@ -2600,19 +2762,48 @@ void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
   if (mask&0x0008) WriteCoord(m,origin_z);
   if (mask&0x0200) WriteAngle(m,angles_3);
 
-  if (mask&0x8000) {
-    temp = *(float*)c->down->down;
+  if (mask&0x0020) { /* new */
     c=c->next;
-    WriteFloat(m,temp);
+  }
 
-    alpha = *(float*)c->down->down;
-    c=c->next;
-    WriteFloat(m,alpha);
-
-    if (temp == 2.0f) {
-      fullbright = *(float*)c->down->down;
+  if (serverversion == PROTOCOL_NETQUAKE) {
+    if (mask & U_TRANS) {
+      temp = *(float*)c->down->down;
       c=c->next;
-      WriteFloat(m,fullbright);
+      WriteFloat(m,temp);
+
+      alpha = *(float*)c->down->down;
+      c=c->next;
+      WriteFloat(m,alpha);
+
+      if (temp == 2.0f) {
+        fullbright = *(float*)c->down->down;
+        c=c->next;
+        WriteFloat(m,fullbright);
+      }
+    }
+  }
+
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask & U_ALPHA) { /* alpha */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & U_SCALE) { /* scale */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & U_MODEL2) { /* modelindex2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & U_FRAME2) { /* frame2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & U_LERPFINISH) { /* lerpfinish */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
     }
   }
 
@@ -2698,6 +2889,114 @@ void do_dem_spawnstatic2_message_write_bin(node* n, BB_t* m)
   do_simple_argument_write_bin(a, m); a=a->next;
   do_simple_argument_write_bin(a2,m); a2=a2->next;
   do_simple_argument_write_bin(a, m);
+  do_simple_argument_write_bin(a2,m);
+
+  c=c2->next; /* default_alpha */
+  if (c->type!=TOKEN_DEFAULT_ALPHA) {
+    syntaxerror(c->pos,"default_alpha expected");
+  } 
+  if (bits & B_ALPHA) do_simple_argument_write_bin(c->down,m);
+}
+
+void do_dem_spawnbaseline2_message_write_bin(node* n, BB_t* m)
+{
+  node* c;
+  node* c2;
+  node* a;
+  node* a2;
+  char ts[1000];
+  int bits;
+
+  /* 
+    I don't do any kind of check in here. If the internal structure is
+    corrupt this gives a total crash.
+
+    spawnbaseline is very easy: all commands have to be there
+  */
+
+  /* fprintf(stderr,"b"); */
+  /* at first: the message id */
+  WriteByte(m,node_token_id(n->type));
+
+  /* message -> commands */
+  c=n->down; /* entity */
+  if (c==NULL) syntaxerror(n->pos, "command entity missing");
+  if (c->type!=TOKEN_ENTITY) {
+    sprintf(ts, "command is %s, should be %s", 
+                node_token_string(c->type), 
+                node_token_string(TOKEN_ENTITY));
+    syntaxerror(c->pos, ts);
+  }
+  do_simple_argument_write_bin(c->down,m);
+
+  c=c->next; /* bits */
+  if (c==NULL) syntaxerror(n->pos, "command bits missing");
+  if (c->type!=TOKEN_BITS) {
+    syntaxerror(c->pos,"bits expected");
+  }
+  do_simple_argument_write_bin(c->down,m);
+  a=c->down;
+  bits = *(long*)a->down;
+
+  c=c->next; /* default_modelindex */
+  if (c==NULL) syntaxerror(n->pos, "command default_modelindex missing");
+  if (c->type!=TOKEN_DEFAULT_MODELINDEX) {
+    syntaxerror(c->pos, "default_modelindex expected");
+  }
+  // do_simple_argument_write_bin(c->down,m);
+  a=c->down;
+  if (bits & B_LARGEMODEL) 
+    WriteShort(m,*(long*)a->down);
+  else
+    WriteByte(m,*(long*)a->down);
+
+  c=c->next; /* default_frame */
+  if (c==NULL) syntaxerror(n->pos, "command default_frame missing");
+  if (c->type!=TOKEN_DEFAULT_FRAME) {
+    syntaxerror(c->pos, "default_frame expected");
+  }
+  // do_simple_argument_write_bin(c->down,m);
+  a=c->down;
+  if (bits & B_LARGEFRAME) 
+    WriteShort(m,*(long*)a->down);
+  else 
+    WriteByte(m,*(long*)a->down);
+
+  c=c->next; /* default_colormap */
+  if (c==NULL) syntaxerror(n->pos, "command default_colormap missing");
+  if (c->type!=TOKEN_DEFAULT_COLORMAP) {
+    syntaxerror(c->pos, "default_colormap expected");
+  }
+  do_simple_argument_write_bin(c->down,m);
+
+  c=c->next; /* default_skin */
+  if (c==NULL) syntaxerror(n->pos, "command default_skin missing");
+  if (c->type!=TOKEN_DEFAULT_SKIN) {
+    syntaxerror(c->pos, "default_skin expected");
+  }
+  do_simple_argument_write_bin(c->down,m);
+
+  c=c->next; /* default_origin */
+  if (c==NULL) syntaxerror(n->pos, "command default_origin missing");
+  if (c->type!=TOKEN_DEFAULT_ORIGIN) {
+    syntaxerror(c->pos, "default_origin expected");
+  }
+
+  c2=c->next; /* default_angles */
+  if (c2==NULL) syntaxerror(n->pos, "command default_angles missing");
+  if (c2->type!=TOKEN_DEFAULT_ANGLES) {
+    syntaxerror(c->pos, "default_angles expected");
+  }
+
+  /* default_origin and default_angles are combined */
+  a=c->down;
+  a2=c2->down;
+
+  do_simple_argument_write_bin(a, m); a=a->next;
+  do_simple_argument_write_bin(a2,m); a2=a2->next;
+  do_simple_argument_write_bin(a, m); a=a->next;
+  do_simple_argument_write_bin(a2,m); a2=a2->next;
+  do_simple_argument_write_bin(a, m); 
   do_simple_argument_write_bin(a2,m);
 
   c=c2->next; /* default_alpha */

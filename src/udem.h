@@ -170,6 +170,8 @@ extern node* do_skybox_message_read_bin(BB_t* m);
 extern node* do_spawnbaseline2_message_read_bin(BB_t* m);
 #define     c_spawnstatic2     0x2B
 extern node* do_spawnstatic2_message_read_bin(BB_t* m);
+#define     c_spawnstaticsound2 0x2C
+extern node* do_spawnstaticsound2_message_read_bin(BB_t* m);
 
 extern node* do_updateentity_message_read_bin(BB_t* m, long mask);
 
