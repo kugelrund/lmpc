@@ -428,7 +428,8 @@ dem_m_sound: TOKEN_SOUND '{' dem_qwd_mcs_sound '}' {
 			  { TOKEN_ATTENUATION, 0 },
 			  { TOKEN_CHANNEL,     1 },
 			  { TOKEN_ENTITY,      1 },
-			  { TOKEN_SOUNDNUM,    1 },
+			  { TOKEN_SOUNDNUM,    0 },
+			  { TOKEN_SOUNDNUM2,   0 },
 			  { TOKEN_ORIGIN,      1 }
 			};
 			$$=node_add_down($1,$3);
@@ -462,6 +463,7 @@ dem_qwd_mc_sound: c_vol { $$=$1; }
 		| c_channel { $$=$1; }
 		| c_entity { $$=$1; }
 		| c_soundnum { $$=$1; }
+		| c_soundnum2 { $$=$1; }
 		| c_origin { $$=$1; };
 
 dm2_m_sound: TOKEN_SOUND '{' dm2_mcs_sound '}' {
@@ -686,7 +688,16 @@ m_clientdata: TOKEN_CLIENTDATA '{' mcs_clientdata '}' {
 			  { TOKEN_AMMO_NAILS,   1 },
 			  { TOKEN_AMMO_ROCKETS, 1 },
 			  { TOKEN_AMMO_CELLS,   1 },
-			  { TOKEN_WEAPON,       1 }
+			  { TOKEN_WEAPON,       1 },
+			  { TOKEN_WEAPONMODEL2, 0 },
+			  { TOKEN_ARMORVALUE2,  0 },
+			  { TOKEN_CURRENTAMMO2, 0 },
+			  { TOKEN_AMMO_SHELLS2, 0 },
+			  { TOKEN_AMMO_NAILS2,  0 },
+			  { TOKEN_AMMO_ROCKETS2,0 },
+			  { TOKEN_AMMO_CELLS2,  0 },
+			  { TOKEN_WEAPONFRAME2, 0 },
+			  { TOKEN_WEAPONALPHA, 0 },
 			};
 			$$=node_add_down($1,$3);
 			$$->hint = H_DEM_CLIENTDATA;
@@ -730,8 +741,17 @@ mc_clientdata: c_view_ofs_z { $$=$1; }
 		| c_ammo_shells { $$=$1; }
 		| c_ammo_nails { $$=$1; }
 		| c_ammo_rockets { $$=$1; }
-		| c_ammo_cells{ $$=$1; }
-		| c_weapon { $$=$1; };
+		| c_ammo_cells { $$=$1; }
+		| c_weapon { $$=$1; }
+		| c_weaponmodel2 { $$=$1; }
+		| c_armorvalue2 { $$=$1; }
+		| c_currentammo2 { $$=$1; }
+		| c_ammo_shells2 { $$=$1; }
+		| c_ammo_nails2 { $$=$1; }
+		| c_ammo_rockets2 { $$=$1; }
+		| c_ammo_cells2 { $$=$1; }
+		| c_weaponframe2 { $$=$1; }
+		| c_weaponalpha { $$=$1; };
 
 qwd_m_playerinfo: TOKEN_PLAYERINFO '{' qwd_mcs_playerinfo '}' {
 			CO_t playerinfo_cs[] = {
@@ -1442,7 +1462,7 @@ m_spawnstaticsound: TOKEN_SPAWNSTATICSOUND '{' mcs_spawnstaticsound '}' {
 m_spawnstaticsound2: TOKEN_SPAWNSTATICSOUND2 '{' mcs_spawnstaticsound2 '}' {
 			CO_t spawnstaticsound_cs[] = {
 			  { TOKEN_ORIGIN,      1 },
-			  { TOKEN_SOUNDNUM,    1 },
+			  { TOKEN_SOUNDNUM2,   1 },
 			  { TOKEN_VOL,         1 }, 
 			  { TOKEN_ATTENUATION, 1 } 
 			};
@@ -1458,15 +1478,20 @@ mcs_spawnstaticsound: mc_spawnstaticsound {
 			$$=node_add_next($1,$2);
 		};
 
-mcs_spawnstaticsound2: mc_spawnstaticsound {
+mcs_spawnstaticsound2: mc_spawnstaticsound2 {
 			$$=$1;
 		}
-		| mcs_spawnstaticsound2 mc_spawnstaticsound {
+		| mcs_spawnstaticsound2 mc_spawnstaticsound2 {
 			$$=node_add_next($1,$2);
 		};
 
 mc_spawnstaticsound: c_origin { $$=$1; }
 		| c_soundnum { $$=$1; }
+		| c_vol { $$=$1; }
+		| c_attenuation { $$=$1; };
+
+mc_spawnstaticsound2: c_origin { $$=$1; }
+		| c_soundnum2 { $$=$1; }
 		| c_vol { $$=$1; }
 		| c_attenuation { $$=$1; };
 
@@ -2120,6 +2145,12 @@ c_soundnum: TOKEN_SOUNDNUM v_int ';' {
 			node_add_down($$,$2);
 		};
 
+c_soundnum2: TOKEN_SOUNDNUM2 v_int ';' {
+			$2->hint = H_SHORT;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
 c_origin: TOKEN_ORIGIN floatvector ';' {
 			node_add_hint_next($2,H_COORD);
 			$$=node_add_down($1,$2);
@@ -2336,6 +2367,51 @@ c_ammo_cells: TOKEN_AMMO_CELLS v_int ';' {
 c_weapon: TOKEN_WEAPON intlist ';' {
                         $$=node_add_down($1,$2);
                 };
+
+c_weaponmodel2: TOKEN_WEAPONMODEL2 v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
+c_armorvalue2: TOKEN_ARMORVALUE2 v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
+c_currentammo2: TOKEN_CURRENTAMMO2 v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
+c_ammo_shells2: TOKEN_AMMO_SHELLS2 v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
+c_ammo_nails2: TOKEN_AMMO_NAILS2 v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
+c_ammo_rockets2: TOKEN_AMMO_ROCKETS2 v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
+c_ammo_cells2: TOKEN_AMMO_CELLS2 v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
+c_weaponframe2: TOKEN_WEAPONFRAME2 v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
+
+c_weaponalpha: TOKEN_WEAPONALPHA v_int ';' {
+			$2->hint = H_BYTE;
+			$$=node_add_down($1,$2);
+		};
 
 c_colors: TOKEN_COLORS v_int v_int ';' {
 			node_add_next($2,$3);

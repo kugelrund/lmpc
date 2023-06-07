@@ -96,6 +96,7 @@ token_t DEM_token[]={
 	{ "channel",            TOKEN_CHANNEL, 0 },
 	{ "entity",             TOKEN_ENTITY, 0 },
 	{ "soundnum",           TOKEN_SOUNDNUM, 0 },
+	{ "soundnum2",          TOKEN_SOUNDNUM2, 0 },
 	{ "origin",             TOKEN_ORIGIN, 0 },
 	{ "serverversion",      TOKEN_SERVERVERSION, 0 },
 	{ "maxclients",         TOKEN_MAXCLIENTS, 0 },
@@ -180,7 +181,16 @@ token_t DEM_token[]={
 	{ "frame2",             TOKEN_FRAME2, 0 },
 	{ "modelindex2",        TOKEN_MODELINDEX2, 0 },
 	{ "lerpfinish",         TOKEN_LERPFINISH, 0 },
-		
+	{ "weaponmodel2",       TOKEN_WEAPONMODEL2, 0 },
+	{ "armorvalue2",        TOKEN_ARMORVALUE2, 0 },
+	{ "currentammo2",       TOKEN_CURRENTAMMO2, 0 },
+	{ "ammo_shells2",       TOKEN_AMMO_SHELLS2, 0 },
+	{ "ammo_nails2",        TOKEN_AMMO_NAILS2, 0 },
+	{ "ammo_rockets2",      TOKEN_AMMO_ROCKETS2, 0 },
+	{ "ammo_cells2",        TOKEN_AMMO_CELLS2, 0 },		
+	{ "weaponframe2",       TOKEN_WEAPONFRAME2, 0 },
+	{ "weaponalpha",        TOKEN_WEAPONALPHA, 0 },
+
         { NULL, 0, 0}
 };
 
@@ -709,7 +719,8 @@ node* do_sound_message_read_bin(BB_t* m)
   }
   n=node_link(n,node_command_init(TOKEN_CHANNEL,V_INT,0,NODE_VALUE_INT_dup(channel),0));
   n=node_link(n,node_command_init(TOKEN_ENTITY,V_INT,0,NODE_VALUE_INT_dup(entity),0));
-  tn = node_command_init(TOKEN_SOUNDNUM,V_INT,mask & SND_LARGESOUND ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
+  tn = (mask & SND_LARGESOUND) ? node_command_init(TOKEN_SOUNDNUM2,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0) :
+                                 node_command_init(TOKEN_SOUNDNUM,V_INT,H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
   if (soundnum >= 1 && 
       soundnum <= DEMTOP->numsounds) {
     node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_sounds[soundnum]));
@@ -942,6 +953,21 @@ node* do_updatefrags_message_read_bin(BB_t* m)
   return n;
 }
 
+#define	PROTOCOL_NETQUAKE	  15	//johnfitz -- standard quake protocol
+#define PROTOCOL_FITZQUAKE	666 //johnfitz -- added new protocol for fitzquake 0.85
+
+#define SU_EXTEND1		(1<<15) // another byte to follow
+#define SU_WEAPON2		(1<<16) // 1 byte, this is .weaponmodel & 0xFF00 (second byte)
+#define SU_ARMOR2		  (1<<17) // 1 byte, this is .armorvalue & 0xFF00 (second byte)
+#define SU_AMMO2		  (1<<18) // 1 byte, this is .currentammo & 0xFF00 (second byte)
+#define SU_SHELLS2		(1<<19) // 1 byte, this is .ammo_shells & 0xFF00 (second byte)
+#define SU_NAILS2		  (1<<20) // 1 byte, this is .ammo_nails & 0xFF00 (second byte)
+#define SU_ROCKETS2		(1<<21) // 1 byte, this is .ammo_rockets & 0xFF00 (second byte)
+#define SU_CELLS2		  (1<<22) // 1 byte, this is .ammo_cells & 0xFF00 (second byte)
+#define SU_EXTEND2		(1<<23) // another byte to follow
+#define SU_WEAPONFRAME2	(1<<24) // 1 byte, this is .weaponframe & 0xFF00 (second byte)
+#define SU_WEAPONALPHA	(1<<25) // 1 byte, this is alpha for weaponmodel, uses ENTALPHA_ENCODE, not sent if ENTALPHA_DEFAULT
+
 /* 0x0F ----------------------------------------------------------------------*/
 node* do_clientdata_message_read_bin(BB_t* m)
 {
@@ -968,13 +994,28 @@ node* do_clientdata_message_read_bin(BB_t* m)
   long ammo_cells;
   long weapon;
 
+  // PROTOCOL_FITZQUAKE related
+  long weaponmodel2;
+  long armorvalue2;
+  long currentammo2;
+  long ammo_shells2;
+  long ammo_nails2;
+  long ammo_rockets2;
+  long ammo_cells2;
+  long weaponframe2;
+  long weaponalpha;
+
   long uk_bit_b10, uk_bit_b11; /* unknown (unused ??) */
 
   /* init */
   armorvalue=weaponmodel=weaponframe=items=0;
 
   /* binary in */
-  mask = ReadShort(m);
+  mask = (unsigned short)ReadShort(m);
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask & SU_EXTEND1) mask |= (ReadByte(m) << 16);
+    if (mask & SU_EXTEND2) mask |= (ReadByte(m) << 24);
+  }
   view_ofs_z = mask & 0x0001 ? (float) ReadChar(m) : 22.0;
   punchangle_x = mask & 0x0002 ? (float) ReadChar(m) : 0.0;
   angles[0] = mask & 0x0004 ? (vec_t) ReadChar(m) : 0.0;
@@ -1000,6 +1041,18 @@ node* do_clientdata_message_read_bin(BB_t* m)
   ammo_rockets = ReadByte(m);
   ammo_cells = ReadByte(m);
   weapon = ReadByte(m);
+
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    weaponmodel2 = (mask & SU_WEAPON2) ? ReadByte(m) : 0;
+    armorvalue2 = (mask & SU_ARMOR2) ? ReadByte(m) : 0;
+    currentammo2 = (mask & SU_AMMO2) ? ReadByte(m) : 0;
+    ammo_shells2 = (mask & SU_SHELLS2) ? ReadByte(m) : 0;
+    ammo_nails2 = (mask & SU_NAILS2) ? ReadByte(m) : 0;
+    ammo_rockets2 = (mask & SU_ROCKETS2) ? ReadByte(m) : 0;
+    ammo_cells2 = (mask & SU_CELLS2) ? ReadByte(m) : 0;
+    weaponframe2 = (mask & SU_WEAPONFRAME2) ? ReadByte(m) : 0;
+    weaponalpha = (mask & SU_WEAPONALPHA) ? ReadByte(m) : 0;
+  }
 
   /* construct node tree and return the root of it */
   n=NULL; 
@@ -1147,6 +1200,36 @@ node* do_clientdata_message_read_bin(BB_t* m)
   }
   else {
     node_add_next(n,node_command_init(TOKEN_WEAPON,V_INT,H_BYTE,NODE_VALUE_INT_dup(1),0));  
+  }
+
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask & SU_WEAPON2) { 
+      node_add_next(n,node_command_init(TOKEN_WEAPONMODEL2,V_INT,H_BYTE,NODE_VALUE_INT_dup(weaponmodel2),0));
+    }
+    if (mask & SU_ARMOR2) { 
+      node_add_next(n,node_command_init(TOKEN_ARMORVALUE2,V_INT,H_BYTE,NODE_VALUE_INT_dup(armorvalue2),0));
+    }
+    if (mask & SU_AMMO2) { 
+      node_add_next(n,node_command_init(TOKEN_CURRENTAMMO2,V_INT,H_BYTE,NODE_VALUE_INT_dup(currentammo2),0));
+    }
+    if (mask & SU_SHELLS2) { 
+      node_add_next(n,node_command_init(TOKEN_AMMO_SHELLS2,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_shells2),0));
+    }
+    if (mask & SU_NAILS2) { 
+      node_add_next(n,node_command_init(TOKEN_AMMO_NAILS2,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_nails2),0));
+    }
+    if (mask & SU_ROCKETS2) { 
+      node_add_next(n,node_command_init(TOKEN_AMMO_ROCKETS2,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_rockets2),0));
+    }
+    if (mask & SU_CELLS2) { 
+      node_add_next(n,node_command_init(TOKEN_AMMO_CELLS2,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_cells2),0));
+    }
+    if (mask & SU_WEAPONFRAME2) { 
+      node_add_next(n,node_command_init(TOKEN_WEAPONFRAME2,V_INT,H_BYTE,NODE_VALUE_INT_dup(weaponframe2),0));
+    }
+    if (mask & SU_WEAPONALPHA) { 
+      node_add_next(n,node_command_init(TOKEN_WEAPONALPHA,V_INT,H_BYTE,NODE_VALUE_INT_dup(weaponalpha),0));
+    }
   }
                                   
   return node_init_all(TOKEN_CLIENTDATA,H_DEM_CLIENTDATA,n,0);
@@ -1850,7 +1933,7 @@ node* do_spawnstaticsound2_message_read_bin(BB_t* m)
   /* construct node tree and return the root of it */
   n = node_triple_command_init(TOKEN_ORIGIN,V_FLOAT,H_COORD,
       NODE_VALUE_FLOAT_dup(origin[0]),NODE_VALUE_FLOAT_dup(origin[1]),NODE_VALUE_FLOAT_dup(origin[2]),0);
-  tn = node_command_init(TOKEN_SOUNDNUM,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0);
+  tn = node_command_init(TOKEN_SOUNDNUM2,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0);
   if (soundnum >= 1 &&
       soundnum <= DEMTOP->numsounds) {
     node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_sounds[soundnum]));
@@ -1860,9 +1943,6 @@ node* do_spawnstaticsound2_message_read_bin(BB_t* m)
   node_add_next(n,node_command_init(TOKEN_ATTENUATION,V_FLOAT,H_ATTENUATION,NODE_VALUE_FLOAT_dup(attenuation),0));
   return node_init_all(TOKEN_SPAWNSTATICSOUND2,H_SIMPLE,n,0);
 }
-
-#define	PROTOCOL_NETQUAKE	  15	//johnfitz -- standard quake protocol
-#define PROTOCOL_FITZQUAKE	666 //johnfitz -- added new protocol for fitzquake 0.85
 
 #define	U_TRANS		    (1<<15)
 #define U_EXTEND1		  (1<<15)
@@ -2178,15 +2258,11 @@ done:
     entity = (*(long*)(a->down)) & 0x1FFF;
   }
   if (entity >= 8192 || channel >= 8) {
-    mask|=SND_LARGEENTITY;
+    mask |= SND_LARGEENTITY;
   }
-  c=c->next; /* 5th command: soundnum */
-  if (c->type==TOKEN_SOUNDNUM) {
-    a=c->down; /* argument */
-    soundnum = *(long*)a->down;
-  }
-  if (soundnum >= 256) {
-     mask |= SND_LARGESOUND;
+  c=c->next; /* 5th command: soundnum or soundnum2 */
+  if (c->type==TOKEN_SOUNDNUM2) {
+      mask |= SND_LARGESOUND;
   }
 
   /* now output */
@@ -2210,11 +2286,8 @@ done:
   else
     WriteShort(m,(entity << 3) | channel);
 
-  c=c->next; /* soundnum */
-  if (mask & SND_LARGESOUND)
-    WriteShort(m,soundnum);
-  else
-    WriteByte(m,soundnum);
+  c=c->next; /* soundnum or soundnum2 */
+  do_simple_argument_write_bin(c->down,m);
 
   c=c->next; /* origin */
   do_simple_arguments_write_bin(c->down,m); /* plural s */
@@ -2329,12 +2402,32 @@ void do_dem_clientdata_message_write_bin(node* n, BB_t* m)
       case TOKEN_WEAPONFRAME:  mask |= 0x1000; break;
       case TOKEN_ARMORVALUE:   mask |= 0x2000; break;
       case TOKEN_WEAPONMODEL:  mask |= 0x4000; break;
+
+      case TOKEN_WEAPONMODEL2: mask |= SU_WEAPON2; break;
+      case TOKEN_ARMORVALUE2:  mask |= SU_ARMOR2; break;
+      case TOKEN_CURRENTAMMO2: mask |= SU_AMMO2; break;
+      case TOKEN_AMMO_SHELLS2: mask |= SU_SHELLS2; break;
+      case TOKEN_AMMO_NAILS2:  mask |= SU_NAILS2; break;
+      case TOKEN_AMMO_ROCKETS2: mask |= SU_ROCKETS2; break;
+      case TOKEN_AMMO_CELLS2:  mask |= SU_CELLS2; break;
+      case TOKEN_WEAPONFRAME2: mask |= SU_WEAPONFRAME2; break;
+      case TOKEN_WEAPONALPHA:  mask |= SU_WEAPONALPHA; break;
     }
+  }
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask >= 65536) mask |= SU_EXTEND1;
+    if (mask >= 16777216) mask |= SU_EXTEND2;
   }
 
   c=n->down; /* start again */
 
   WriteShort(m,mask); /* mask */
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask & SU_EXTEND1)
+      WriteByte(m,mask >> 16);
+    if (mask & SU_EXTEND2)
+      WriteByte(m,mask >> 24);
+  }
 
   if (mask&0x0001) { /* view_ofs_z */
     WriteChar(m,(char)(*(float*)c->down->down));
@@ -2442,8 +2535,47 @@ void do_dem_clientdata_message_write_bin(node* n, BB_t* m)
       }
     }
     WriteByte(m,value);
+    c=c->next;
   }
 
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    if (mask & SU_WEAPON2) { /* weaponmodel2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & SU_ARMOR2) { /* armorvalue2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & SU_AMMO2) { /* currentammo2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & SU_SHELLS2) { /* ammo_shells2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & SU_NAILS2) { /* ammo_nails2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & SU_ROCKETS2) { /* ammo_rockets2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & SU_CELLS2) { /* ammo_cells2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & SU_WEAPONFRAME2) { /* weaponframe2 */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+    if (mask & SU_WEAPONALPHA) { /* weaponalpha */
+      do_simple_argument_write_bin(c->down, m);
+      c=c->next;
+    }
+  }
 }
 
 void do_dem_stopsound_message_write_bin(node* n, BB_t* m)
