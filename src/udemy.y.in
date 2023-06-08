@@ -264,6 +264,11 @@ dem_message: m_unknown  { $$=$1; }
 		| m_sellscreen { $$=$1; }
 		| m_cutscene { $$=$1; }
 		| m_updateentity { $$=$1; }
+		| m_showlmp { $$=$1; }
+		| m_hidelmp { $$=$1; }
+		| m_skybox { $$=$1; }
+		| m_bf { $$=$1; }
+		| m_fog { $$=$1; }
 		| dem_m_spawnbaseline2 { $$=$1; }
 		| dem_m_spawnstatic2 { $$=$1; }
 		| m_spawnstaticsound2 { $$=$1; };
@@ -1495,6 +1500,111 @@ mc_spawnstaticsound2: c_origin { $$=$1; }
 		| c_vol { $$=$1; }
 		| c_attenuation { $$=$1; };
 
+m_showlmp: TOKEN_SHOWLMP '{' mcs_showlmp '}' {
+			CO_t showlmp_cs[] = {
+			  { TOKEN_LMPLABEL,  1 },
+			  { TOKEN_PICNAME,   1 },
+			  { TOKEN_X,         1 }, 
+			  { TOKEN_Y,         1 } 
+			};
+			$$=node_add_down($1,$3);
+			$$->hint = H_SIMPLE;
+			reorder_commands($$, showlmp_cs, arraylength(showlmp_cs));
+		};
+
+mcs_showlmp: mc_showlmp {
+			$$=$1;
+		}
+		| mcs_showlmp mc_showlmp {
+			$$=node_add_next($1,$2);
+		};
+
+mc_showlmp: c_lmplabel { $$=$1; }
+		| c_picname { $$=$1; }
+		| c_x { $$=$1; }
+		| c_y { $$=$1; };
+
+m_hidelmp: TOKEN_HIDELMP '{' mcs_hidelmp '}' {
+			CO_t hidelmp_cs[] = {
+			  { TOKEN_LMPLABEL,  1 }
+			};
+			$$=node_add_down($1,$3);
+			$$->hint = H_SIMPLE;
+			reorder_commands($$, hidelmp_cs, arraylength(hidelmp_cs));
+		};
+
+mcs_hidelmp: mc_hidelmp {
+			$$=$1;
+		}
+		| mcs_hidelmp mc_hidelmp {
+			$$=node_add_next($1,$2);
+		};
+
+mc_hidelmp: c_lmplabel { $$=$1; };
+
+m_skybox: TOKEN_SKYBOX v_string ';' {
+			$$=$1;
+			node_add_down($$,$2);
+			$$->hint = H_SIMPLE;
+		}
+
+m_bf: TOKEN_BF ';' {
+			$$=$1;
+			$$->hint = H_SIMPLE;
+		};
+
+m_fog: TOKEN_FOG '{' mcs_fog '}' {
+			CO_t fog_cs[] = {
+			  { TOKEN_DENSITY,  1 },
+			  { TOKEN_RED,      1 },
+			  { TOKEN_GREEN,    1 }, 
+			  { TOKEN_BLUE,     1 }, 
+			  { TOKEN_FOGTIME,  1 }
+			};
+			$$=node_add_down($1,$3);
+			$$->hint = H_SIMPLE;
+			reorder_commands($$, fog_cs, arraylength(fog_cs));
+		};
+
+mcs_fog: mc_fog {
+			$$=$1;
+		}
+		| mcs_fog mc_fog {
+			$$=node_add_next($1,$2);
+		};
+
+mc_fog: c_density { $$=$1; }
+		| c_red { $$=$1; }
+		| c_green { $$=$1; }
+		| c_blue { $$=$1; }
+		| c_fogtime { $$=$1; };
+
+m_achievement: TOKEN_ACHIEVEMENT v_string ';' {
+			$$=$1;
+			node_add_down($$,$2);
+			$$->hint = H_SIMPLE;
+		}
+
+m_localsound: TOKEN_LOCALSOUND '{' mcs_localsound '}' {
+			CO_t localsound_cs[] = {
+			  { TOKEN_SOUNDNUM,    0 },
+			  { TOKEN_SOUNDNUM2,   0 }
+			};
+			$$=node_add_down($1,$3);
+			$$->hint = H_SIMPLE;
+			reorder_commands($$, localsound_cs, arraylength(localsound_cs));
+		};
+
+mcs_localsound: mc_localsound {
+			$$=$1;
+		}
+		| mcs_localsound mc_localsound {
+			$$=node_add_next($1,$2);
+		};
+
+mc_localsound: c_soundnum { $$=$1; }
+		| c_soundnum2 { $$=$1; };
+
 dem_m_intermission: TOKEN_INTERMISSION ';' {
 			$$=$1;
 			$$->hint = H_SIMPLE;
@@ -2159,6 +2269,60 @@ c_origin: TOKEN_ORIGIN floatvector ';' {
 c_origin_i: TOKEN_ORIGIN intvector ';' {
 			node_add_hint_next($2,H_SHORT);
 			$$=node_add_down($1,$2);
+		};
+
+c_lmplabel: TOKEN_LMPLABEL v_string ';' {
+			$2->hint = H_STRING;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
+c_picname: TOKEN_PICNAME v_string ';' {
+			$2->hint = H_STRING;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
+c_x: TOKEN_X v_int ';' {
+			$2->hint = H_BYTE;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
+c_y: TOKEN_Y v_int ';' {
+			$2->hint = H_BYTE;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
+c_density: TOKEN_DENSITY v_int ';' {
+			$2->hint = H_BYTE;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
+c_red: TOKEN_RED v_int ';' {
+			$2->hint = H_BYTE;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
+c_green: TOKEN_GREEN v_int ';' {
+			$2->hint = H_BYTE;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
+c_blue: TOKEN_BLUE v_int ';' {
+			$2->hint = H_BYTE;
+			$$=$1;
+			node_add_down($$,$2);
+		};
+
+c_fogtime: TOKEN_FOGTIME v_int ';' {
+			$2->hint = H_SHORT;
+			$$=$1;
+			node_add_down($$,$2);
 		};
 
 c_serverversion: TOKEN_SERVERVERSION v_int ';' {

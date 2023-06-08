@@ -46,6 +46,7 @@
 #define H_DEM_UPDATEENTITY	( H_DEM_HINT | 7 )
 #define H_DEM_SPAWNSTATIC2	( H_DEM_HINT | 8 )
 #define H_DEM_SPAWNBASELINE2	( H_DEM_HINT | 9 )
+#define H_DEM_LOCALSOUND		( H_DEM_HINT | 10 )
 
 
 #include "node.h"
@@ -166,12 +167,20 @@ extern node* do_showlmp_message_read_bin(BB_t* m);
 extern node* do_hidelmp_message_read_bin(BB_t* m);
 #define     c_skybox           0x25
 extern node* do_skybox_message_read_bin(BB_t* m);
+#define     c_bf               0x28
+extern node* do_bf_message_read_bin(void);
+#define     c_fog              0x29
+extern node* do_fog_message_read_bin(BB_t* m);
 #define     c_spawnbaseline2   0x2A
 extern node* do_spawnbaseline2_message_read_bin(BB_t* m);
 #define     c_spawnstatic2     0x2B
 extern node* do_spawnstatic2_message_read_bin(BB_t* m);
 #define     c_spawnstaticsound2 0x2C
 extern node* do_spawnstaticsound2_message_read_bin(BB_t* m);
+#define     c_achievement      0x34
+extern node* do_achievement_message_read_bin(BB_t* m);
+#define     c_localsound       0x38
+extern node* do_localsound_message_read_bin(BB_t* m);
 
 extern node* do_updateentity_message_read_bin(BB_t* m, long mask);
 

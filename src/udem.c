@@ -82,10 +82,14 @@ token_t DEM_token[]={
 	{ "showlmp",		        TOKEN_SHOWLMP, c_showlmp },
 	{ "hidelmp",		        TOKEN_HIDELMP, c_hidelmp },
 	{ "skybox",			        TOKEN_SKYBOX, c_skybox },
+	{ "bf",			            TOKEN_BF, c_bf },
+	{ "fog",			          TOKEN_FOG, c_fog },
 	{ "spawnbaseline2",     TOKEN_SPAWNBASELINE2, c_spawnbaseline2 },
 	{ "spawnstatic2",       TOKEN_SPAWNSTATIC2, c_spawnstatic2 },
 	{ "spawnstaticsound2",  TOKEN_SPAWNSTATICSOUND2, c_spawnstaticsound2 },
-	{ "updateentity",       TOKEN_UPDATEENTITY, 0 },
+	{ "achievement",        TOKEN_ACHIEVEMENT, c_achievement },
+	{ "localsound",         TOKEN_LOCALSOUND, c_localsound },
+  { "updateentity",       TOKEN_UPDATEENTITY, 0 },
 
 	{ "id",                 TOKEN_ID, 0 },
 	{ "data",               TOKEN_DATA, 0 },
@@ -190,7 +194,11 @@ token_t DEM_token[]={
 	{ "ammo_cells2",        TOKEN_AMMO_CELLS2, 0 },		
 	{ "weaponframe2",       TOKEN_WEAPONFRAME2, 0 },
 	{ "weaponalpha",        TOKEN_WEAPONALPHA, 0 },
-
+	{ "density",            TOKEN_DENSITY, 0 },
+	{ "red",                TOKEN_RED, 0 },
+	{ "green",              TOKEN_GREEN, 0 },
+	{ "blue",               TOKEN_BLUE, 0 },
+	{ "fogtime",            TOKEN_FOGTIME, 0 },
         { NULL, 0, 0}
 };
 
@@ -409,12 +417,20 @@ node* do_message_read_bin(BB_t* m)
     case c_hidelmp:          n=do_hidelmp_message_read_bin(m);           break;
     /* 0x25 */
     case c_skybox:           n=do_skybox_message_read_bin(m);            break;
+    /* 0x28 */
+    case c_bf:               n=do_bf_message_read_bin();                 break;
+    /* 0x29 */
+    case c_fog:              n=do_fog_message_read_bin(m);               break;
     /* 0x2A */
     case c_spawnbaseline2:   n=do_spawnbaseline2_message_read_bin(m);    break;
     /* 0x2B */
     case c_spawnstatic2:     n=do_spawnstatic2_message_read_bin(m);      break;
     /* 0x2C */
     case c_spawnstaticsound2: n=do_spawnstaticsound2_message_read_bin(m); break;
+    /* 0x34 */
+    case c_achievement:      n=do_achievement_message_read_bin(m);       break;
+    /* 0x38 */
+    case c_localsound:       n=do_localsound_message_read_bin(m);        break;
     default: if (id>=0x80) 
                n=do_updateentity_message_read_bin(m,id & 0x7F);
              else 
@@ -1800,6 +1816,41 @@ node* do_skybox_message_read_bin(BB_t* m)
                        H_SIMPLE);
 }
 
+/* 0x28 ----------------------------------------------------------------------*/
+node* do_bf_message_read_bin(void)
+{
+  /* construct node tree and return the root of it */
+  return node_init_all(TOKEN_BF,H_SIMPLE,NULL,0);
+}
+
+/* 0x29 ----------------------------------------------------------------------*/
+node* do_fog_message_read_bin(BB_t* m)
+{
+  node *n;
+
+  /* variables */
+  long density;
+  long red;
+  long green; 
+  long blue;
+  long time;
+
+  /* binary in */
+  density = ReadByte(m);
+  red = ReadByte(m);
+  green = ReadByte(m);
+  blue = ReadByte(m);
+  time = ReadShort(m);
+
+  /* construct node tree and return the root of it */
+  n = node_command_init(TOKEN_DENSITY,V_INT,H_BYTE,NODE_VALUE_INT_dup(density),0);
+  node_add_next(n,node_command_init(TOKEN_RED,V_INT,H_BYTE,NODE_VALUE_INT_dup(red),0));
+  node_add_next(n,node_command_init(TOKEN_GREEN,V_INT,H_BYTE,NODE_VALUE_INT_dup(green),0));
+  node_add_next(n,node_command_init(TOKEN_BLUE,V_INT,H_BYTE,NODE_VALUE_INT_dup(blue),0));
+  node_add_next(n,node_command_init(TOKEN_FOGTIME,V_INT,H_SHORT,NODE_VALUE_INT_dup(time),0));
+  return node_init_all(TOKEN_FOG,H_SIMPLE,n,0);
+}
+
 #define B_LARGEMODEL		  (1<<0)	// modelindex is short instead of byte
 #define B_LARGEFRAME		  (1<<1)	// frame is short instead of byte
 #define B_ALPHA			      (1<<2)	// 1 byte, uses ENTALPHA_ENCODE, not sent if ENTALPHA_DEFAULT
@@ -1942,6 +1993,47 @@ node* do_spawnstaticsound2_message_read_bin(BB_t* m)
   node_add_next(n,node_command_init(TOKEN_VOL,V_FLOAT,H_VOL,NODE_VALUE_FLOAT_dup(vol),0));
   node_add_next(n,node_command_init(TOKEN_ATTENUATION,V_FLOAT,H_ATTENUATION,NODE_VALUE_FLOAT_dup(attenuation),0));
   return node_init_all(TOKEN_SPAWNSTATICSOUND2,H_SIMPLE,n,0);
+}
+
+/* 0x34 ----------------------------------------------------------------------*/
+node* do_achievement_message_read_bin(BB_t* m)
+{
+  /* variables */
+  char text[MAX_STRING_SIZE];
+
+  /* binary in */
+  ReadString(m, text);
+
+  /* construct node tree and return the root of it */
+  return node_add_hint(node_command_init(TOKEN_ACHIEVEMENT,V_STRING,H_STRING,NODE_VALUE_STRING_dup(text),0),
+                       H_SIMPLE);
+}
+
+/* 0x38 ----------------------------------------------------------------------*/
+node* do_localsound_message_read_bin(BB_t* m)
+{
+  node *n, *tn;
+
+  /* variables */
+  long mask;
+  long soundnum;
+
+  int i;
+
+  /* binary in */
+  mask = ReadByte(m);
+  soundnum = (mask & SND_LARGESOUND) ? ReadShort(m) : ReadByte(m);
+
+  /* construct node tree and return the root of it */
+  n = NULL;
+  tn = (mask & SND_LARGESOUND) ? node_command_init(TOKEN_SOUNDNUM2,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0) :
+                                 node_command_init(TOKEN_SOUNDNUM,V_INT,H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
+  if (soundnum >= 1 && 
+      soundnum <= DEMTOP->numsounds) {
+    node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_sounds[soundnum]));
+  }
+  n=node_link(n,tn);
+  return node_init_all(TOKEN_LOCALSOUND,H_DEM_LOCALSOUND,n,0);
 }
 
 #define	U_TRANS		    (1<<15)
@@ -2188,6 +2280,9 @@ node* DEM_block_write_bin(node* b)
             break;
             case H_DEM_SPAWNBASELINE2:
               do_dem_spawnbaseline2_message_write_bin(tn,&m);		
+            break;
+            case H_DEM_LOCALSOUND:
+              do_dem_localsound_message_write_bin(tn,&m);
             break;
             default: /* this creates a bad message */
               *m.p='\0';
@@ -3136,6 +3231,29 @@ void do_dem_spawnbaseline2_message_write_bin(node* n, BB_t* m)
     syntaxerror(c->pos,"default_alpha expected");
   } 
   if (bits & B_ALPHA) do_simple_argument_write_bin(c->down,m);
+}
+
+void do_dem_localsound_message_write_bin(node* n, BB_t* m)
+{
+  node* c;
+  unsigned char mask;
+  long soundnum = 0;  
+
+  /* at first: the message id */
+  WriteByte(m,node_token_id(n->type));
+
+  mask = 0;
+
+  /* message -> commands */
+  c=n->down;
+  if (c->type==TOKEN_SOUNDNUM2) {
+      mask |= SND_LARGESOUND;
+  }
+
+  /* now output */
+  WriteByte(m,mask);
+  c=n->down;
+  do_simple_argument_write_bin(c->down,m);
 }
 
 /******************************************************************************/
