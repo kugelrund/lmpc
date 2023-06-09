@@ -100,7 +100,6 @@ token_t DEM_token[]={
 	{ "channel",            TOKEN_CHANNEL, 0 },
 	{ "entity",             TOKEN_ENTITY, 0 },
 	{ "soundnum",           TOKEN_SOUNDNUM, 0 },
-	{ "soundnum2",          TOKEN_SOUNDNUM2, 0 },
 	{ "origin",             TOKEN_ORIGIN, 0 },
 	{ "serverversion",      TOKEN_SERVERVERSION, 0 },
 	{ "maxclients",         TOKEN_MAXCLIENTS, 0 },
@@ -717,12 +716,7 @@ node* do_sound_message_read_bin(BB_t* m)
     channel = entity_channel & 0x07;
     entity = (entity_channel >> 3) & 0x1FFF;
   }
-  if (mask & SND_LARGESOUND) {
-    soundnum = ReadShort(m);
-  }
-  else {
-    soundnum = ReadByte(m);
-  }
+  soundnum = (mask & SND_LARGESOUND) ? ReadShort(m) : ReadByte(m);
   for (i=0 ; i<3 ; i++) origin[i] = ReadCoord(m);
 
   /* construct node tree and return the root of it */
@@ -735,8 +729,7 @@ node* do_sound_message_read_bin(BB_t* m)
   }
   n=node_link(n,node_command_init(TOKEN_CHANNEL,V_INT,0,NODE_VALUE_INT_dup(channel),0));
   n=node_link(n,node_command_init(TOKEN_ENTITY,V_INT,0,NODE_VALUE_INT_dup(entity),0));
-  tn = (mask & SND_LARGESOUND) ? node_command_init(TOKEN_SOUNDNUM2,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0) :
-                                 node_command_init(TOKEN_SOUNDNUM,V_INT,H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
+  tn = node_command_init(TOKEN_SOUNDNUM,V_INT,(mask & SND_LARGESOUND) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
   if (soundnum >= 1 && 
       soundnum <= DEMTOP->numsounds) {
     node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_sounds[soundnum]));
@@ -1984,7 +1977,7 @@ node* do_spawnstaticsound2_message_read_bin(BB_t* m)
   /* construct node tree and return the root of it */
   n = node_triple_command_init(TOKEN_ORIGIN,V_FLOAT,H_COORD,
       NODE_VALUE_FLOAT_dup(origin[0]),NODE_VALUE_FLOAT_dup(origin[1]),NODE_VALUE_FLOAT_dup(origin[2]),0);
-  tn = node_command_init(TOKEN_SOUNDNUM2,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0);
+  tn = node_command_init(TOKEN_SOUNDNUM,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0);
   if (soundnum >= 1 &&
       soundnum <= DEMTOP->numsounds) {
     node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_sounds[soundnum]));
@@ -1992,7 +1985,7 @@ node* do_spawnstaticsound2_message_read_bin(BB_t* m)
   node_add_next(n,tn);
   node_add_next(n,node_command_init(TOKEN_VOL,V_FLOAT,H_VOL,NODE_VALUE_FLOAT_dup(vol),0));
   node_add_next(n,node_command_init(TOKEN_ATTENUATION,V_FLOAT,H_ATTENUATION,NODE_VALUE_FLOAT_dup(attenuation),0));
-  return node_init_all(TOKEN_SPAWNSTATICSOUND2,H_SIMPLE,n,0);
+  return node_init_all(TOKEN_SPAWNSTATICSOUND2,H_DEM_SPAWNSTATICSOUND2,n,0);
 }
 
 /* 0x34 ----------------------------------------------------------------------*/
@@ -2026,8 +2019,7 @@ node* do_localsound_message_read_bin(BB_t* m)
 
   /* construct node tree and return the root of it */
   n = NULL;
-  tn = (mask & SND_LARGESOUND) ? node_command_init(TOKEN_SOUNDNUM2,V_INT,H_SHORT,NODE_VALUE_INT_dup(soundnum),0) :
-                                 node_command_init(TOKEN_SOUNDNUM,V_INT,H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
+  tn = node_command_init(TOKEN_SOUNDNUM,V_INT,(mask & SND_LARGESOUND) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(soundnum),0);
   if (soundnum >= 1 && 
       soundnum <= DEMTOP->numsounds) {
     node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_sounds[soundnum]));
@@ -2278,6 +2270,9 @@ node* DEM_block_write_bin(node* b)
             case H_DEM_SPAWNSTATIC2:
               do_dem_spawnstatic2_message_write_bin(tn,&m);		
             break;
+            case H_DEM_SPAWNSTATICSOUND2:
+              do_dem_spawnstaticsound2_message_write_bin(tn,&m);		
+            break;
             case H_DEM_SPAWNBASELINE2:
               do_dem_spawnbaseline2_message_write_bin(tn,&m);		
             break;
@@ -2355,9 +2350,13 @@ done:
   if (entity >= 8192 || channel >= 8) {
     mask |= SND_LARGEENTITY;
   }
-  c=c->next; /* 5th command: soundnum or soundnum2 */
-  if (c->type==TOKEN_SOUNDNUM2) {
-      mask |= SND_LARGESOUND;
+  c=c->next; /* 5th command: soundnum */
+  if (c->type==TOKEN_SOUNDNUM) {
+    a=c->down; /* argument */
+    soundnum = *(long*)a->down;
+  }
+  if (soundnum >= 256) {
+     mask |= SND_LARGESOUND;
   }
 
   /* now output */
@@ -2381,8 +2380,11 @@ done:
   else
     WriteShort(m,(entity << 3) | channel);
 
-  c=c->next; /* soundnum or soundnum2 */
-  do_simple_argument_write_bin(c->down,m);
+  c=c->next; /* soundnum */
+  if (mask & SND_LARGESOUND)
+    WriteShort(m,soundnum);
+  else
+    WriteByte(m,soundnum);
 
   c=c->next; /* origin */
   do_simple_arguments_write_bin(c->down,m); /* plural s */
@@ -3125,6 +3127,32 @@ void do_dem_spawnstatic2_message_write_bin(node* n, BB_t* m)
   if (bits & B_ALPHA) do_simple_argument_write_bin(c->down,m);
 }
 
+void do_dem_spawnstaticsound2_message_write_bin(node* n, BB_t* m)
+{
+  node* c;
+  node* a;
+
+  /* at first: the message id */
+  WriteByte(m,node_token_id(n->type));
+
+  /* message -> commands */
+  c=n->down; /* origin */
+  a=c->down;
+  do_simple_argument_write_bin(a, m); a=a->next;
+  do_simple_argument_write_bin(a, m); a=a->next;
+  do_simple_argument_write_bin(a, m);
+
+  c=c->next; /* soundnum */
+  a=c->down;
+  WriteShort(m,*(long*)a->down);
+
+  c=c->next; /* vol */
+  do_simple_argument_write_bin(c->down,m);
+
+  c=c->next; /* attenuation */
+  do_simple_argument_write_bin(c->down,m);
+}
+
 void do_dem_spawnbaseline2_message_write_bin(node* n, BB_t* m)
 {
   node* c;
@@ -3236,6 +3264,7 @@ void do_dem_spawnbaseline2_message_write_bin(node* n, BB_t* m)
 void do_dem_localsound_message_write_bin(node* n, BB_t* m)
 {
   node* c;
+  node* a;
   unsigned char mask;
   long soundnum = 0;  
 
@@ -3246,14 +3275,21 @@ void do_dem_localsound_message_write_bin(node* n, BB_t* m)
 
   /* message -> commands */
   c=n->down;
-  if (c->type==TOKEN_SOUNDNUM2) {
-      mask |= SND_LARGESOUND;
+  if (c->type==TOKEN_SOUNDNUM) {
+    a=c->down; /* argument */
+    soundnum = *(long*)a->down;
+  }
+  if (soundnum >= 256) {
+     mask |= SND_LARGESOUND;
   }
 
   /* now output */
   WriteByte(m,mask);
-  c=n->down;
-  do_simple_argument_write_bin(c->down,m);
+
+  if (mask & SND_LARGESOUND)
+    WriteShort(m,soundnum);
+  else
+    WriteByte(m,soundnum);
 }
 
 /******************************************************************************/
