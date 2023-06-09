@@ -1676,8 +1676,6 @@ m_updateentity: TOKEN_UPDATEENTITY '{' mcs_updateentity '}' {
 			  { TOKEN_FULLBRIGHT,   0 },
 			  { TOKEN_ALPHA,        0 },
 			  { TOKEN_SCALE,        0 },
-			  { TOKEN_FRAME2,       0 },
-			  { TOKEN_MODELINDEX2,  0 },
 			  { TOKEN_LERPFINISH,   0 }
 			};
 			$$=$1;
@@ -1712,8 +1710,6 @@ mc_updateentity: c_entity { $$=$1; }
 		| c_fullbright { $$=$1; }
 		| c_alpha { $$=$1; }
 		| c_scale { $$=$1; }
-		| c_frame2 { $$=$1; }
-		| c_modelindex2 { $$=$1; }
 		| c_lerpfinish { $$=$1; };
 
 dm2_m_deltapacketentities: TOKEN_DELTAPACKETENTITIES '{' c_data '}' {
@@ -2805,11 +2801,6 @@ c_alpha: TOKEN_ALPHA v_int ';' {
 
 c_scale: TOKEN_SCALE v_int ';' {
 			$2->hint = H_BYTE;
-			$$=node_add_down($1,$2);
-		};
-
-c_frame2: TOKEN_FRAME2 v_int ';' {
-			$2->hint = H_SB;
 			$$=node_add_down($1,$2);
 		};
 

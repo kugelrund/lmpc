@@ -181,8 +181,6 @@ token_t DEM_token[]={
 	{ "y",                  TOKEN_Y, 0 },
 	{ "alpha",              TOKEN_ALPHA, 0 },
 	{ "scale",              TOKEN_SCALE, 0 },
-	{ "frame2",             TOKEN_FRAME2, 0 },
-	{ "modelindex2",        TOKEN_MODELINDEX2, 0 },
 	{ "lerpfinish",         TOKEN_LERPFINISH, 0 },
 	{ "weaponmodel2",       TOKEN_WEAPONMODEL2, 0 },
 	{ "armorvalue2",        TOKEN_ARMORVALUE2, 0 },
@@ -2055,8 +2053,7 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
   vec3_t angles;
   long new_;
   float temp, trans, fullbright;
-  long alpha, scale, frame2, modelindex2;
-  long lerpfinish;
+  long alpha, scale, lerpfinish;
 
   /* init */
   origin[0]=origin[1]=origin[2]=angles[0]=angles[1]=angles[2]=0.0;
@@ -2090,15 +2087,17 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
   if (serverversion != PROTOCOL_NETQUAKE) {
     alpha = mask & U_ALPHA ? ReadByte(m) : 0;
     scale = mask & U_SCALE ? ReadByte(m) : 0;
-    frame2 = mask & U_FRAME2 ? ReadByte(m) : 0;
-    modelindex2 = mask & U_MODEL2 ? ReadByte(m) : 0;
+    if (mask & U_FRAME2)
+      frame = (frame & 0x00FF) | (ReadByte(m) << 8);
+    if (mask & U_MODEL2)
+      modelindex = (modelindex & 0x00FF) | (ReadByte(m) << 8);
     lerpfinish = mask & U_LERPFINISH ? ReadByte(m) : 0;
   }
 
   /* construct node tree and return the root of it */
   n=node_command_init(TOKEN_ENTITY,V_INT,H_SHORT,NODE_VALUE_INT_dup(entity),0);
   if (mask & 0x0400) {
-    tn=node_command_init(TOKEN_MODELINDEX,V_INT,H_BYTE,NODE_VALUE_INT_dup(modelindex),0);
+    tn=node_command_init(TOKEN_MODELINDEX,V_INT,(mask & U_MODEL2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(modelindex),0);
     if (modelindex>=1 && 
         modelindex<=DEMTOP->nummodels &&
         DEMTOP->precache_models[modelindex][0]!='*') {
@@ -2107,7 +2106,7 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
     node_add_next(n,tn);
   }
   if (mask & 0x0040) {
-    node_add_next(n,node_command_init(TOKEN_FRAME,V_INT,H_BYTE,NODE_VALUE_INT_dup(frame),0));
+    node_add_next(n,node_command_init(TOKEN_FRAME,V_INT,(mask & U_FRAME2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(frame),0));
   }
   if (mask & 0x0800) {
     node_add_next(n,node_command_init(TOKEN_COLORMAP,V_INT,H_BYTE,NODE_VALUE_INT_dup(colormap),0));
@@ -2152,18 +2151,6 @@ node* do_updateentity_message_read_bin(BB_t* m, long mask)
     }
     if (mask & U_SCALE) { 
       node_add_next(n,node_command_init(TOKEN_SCALE,V_INT,H_BYTE,NODE_VALUE_INT_dup(scale),0));
-    }
-    if (mask & U_FRAME2) {
-      node_add_next(n,node_command_init(TOKEN_FRAME2,V_INT,H_BYTE,NODE_VALUE_INT_dup(frame2),0));
-    }
-    if (mask & U_MODEL2) {
-      tn=node_command_init(TOKEN_MODELINDEX2,V_INT,H_BYTE,NODE_VALUE_INT_dup(modelindex2),0);
-      if (modelindex2>=1 && 
-          modelindex2<=DEMTOP->nummodels &&
-          DEMTOP->precache_models[modelindex2][0]!='*') {
-        node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_models[modelindex2]));
-      }
-      node_add_next(n,tn);
     }
     if (mask & U_LERPFINISH) { 
       node_add_next(n,node_command_init(TOKEN_LERPFINISH,V_INT,H_BYTE,NODE_VALUE_INT_dup(lerpfinish),0));
@@ -2873,7 +2860,9 @@ void do_dem_spawnbaseline_message_write_bin(node* n, BB_t* m)
 void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
 {
   node* c;
+  node* a;
   long mask;
+  long frame, modelindex;
   float origin_x, origin_y, origin_z;
   float angles_1, angles_2, angles_3;
   float temp, alpha, fullbright;
@@ -2907,13 +2896,29 @@ void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
       case TOKEN_TEMP:         mask |= U_TRANS; break;
       case TOKEN_ALPHA:        mask |= U_ALPHA; break;
       case TOKEN_SCALE:        mask |= U_SCALE; break;
-      case TOKEN_FRAME2:       mask |= U_FRAME2; break;
-      case TOKEN_MODELINDEX2:  mask |= U_MODEL2; break;
       case TOKEN_LERPFINISH:   mask |= U_LERPFINISH; break;
     }
   }
-  if (mask>0xFFFF) mask |= U_EXTEND1;
-  if (mask>0xFFFFFF) mask |= U_EXTEND2;
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    c=n->down; /* 1st command: entity */
+    c=c->next; 
+    if (mask & 0x0400) {  /* 2nd command: modelindex */
+      a=c->down;
+      modelindex = *(long*)a->down;
+      if (modelindex & 0xFF00)
+        mask |= U_MODEL2;
+      c=c->next;
+    }
+    if (mask & 0x0040) {  /* 3rd command: frame */
+      a=c->down;
+      frame = *(long*)a->down;
+      if (frame & 0xFF00)
+        mask |= U_FRAME2;     
+    }
+
+    if (mask >= 65536) mask |= U_EXTEND1;
+    if (mask >= 16777216) mask |= U_EXTEND2;
+  }
 
   c=n->down;
   entity = (short)(*(long*)c->down->down);
@@ -3022,13 +3027,11 @@ void do_dem_updateentity_message_write_bin(node* n, BB_t* m)
       do_simple_argument_write_bin(c->down, m);
       c=c->next;
     }
-    if (mask & U_MODEL2) { /* modelindex2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+    if (mask & U_FRAME2) {
+      WriteByte(m, frame >> 8);
     }
-    if (mask & U_FRAME2) { /* frame2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+    if (mask & U_MODEL2) {
+      WriteByte(m, modelindex >> 8);
     }
     if (mask & U_LERPFINISH) { /* lerpfinish */
       do_simple_argument_write_bin(c->down, m);
