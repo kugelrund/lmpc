@@ -958,7 +958,6 @@ dem_m_spawnstatic: TOKEN_SPAWNSTATIC '{' mcs_spawnstatic '}' {
 
 dem_m_spawnstatic2: TOKEN_SPAWNSTATIC2 '{' mcs_spawnstatic2 '}' {
 			CO_t spawnstatic2_cs[] = {
-			  { TOKEN_BITS,               1 },
 			  { TOKEN_DEFAULT_MODELINDEX, 1 },
 			  { TOKEN_DEFAULT_FRAME,      1 }, 
 			  { TOKEN_DEFAULT_COLORMAP,   1 }, 
@@ -1007,8 +1006,7 @@ mcs_spawnstatic2: mc_spawnstatic2 {
 			$$=node_add_next($1,$2);
 		};
 
-mc_spawnstatic2: c_bits { $$=$1; }
-		| c_default_modelindex { $$=$1; }
+mc_spawnstatic2: c_default_modelindex { $$=$1; }
 		| c_default_frame { $$=$1; }
 		| c_default_colormap { $$=$1; }
 		| c_default_skin { $$=$1; }
@@ -1040,7 +1038,6 @@ dem_m_spawnbaseline: TOKEN_SPAWNBASELINE '{' dem_qwd_mcs_spawnbaseline '}' {
 dem_m_spawnbaseline2: TOKEN_SPAWNBASELINE2 '{' dem_qwd_mcs_spawnbaseline2 '}' {
 			CO_t spawnbaseline_cs[] = {
 			  { TOKEN_ENTITY,             1 },
-			  { TOKEN_BITS,               1 },
 			  { TOKEN_DEFAULT_MODELINDEX, 1 },
 			  { TOKEN_DEFAULT_FRAME,      1 }, 
 			  { TOKEN_DEFAULT_COLORMAP,   1 }, 
@@ -1093,7 +1090,6 @@ dem_qwd_mcs_spawnbaseline2: dem_qwd_mc_spawnbaseline2 {
 		};
 
 dem_qwd_mc_spawnbaseline2: c_entity { $$=$1; }
-		| c_bits { $$=$1; }
 		| c_default_modelindex { $$=$1; }
 		| c_default_frame{ $$=$1; }
 		| c_default_colormap { $$=$1; }
@@ -2592,11 +2588,6 @@ c_save: TOKEN_SAVE v_int ';' {
 		};
 
 c_take: TOKEN_TAKE v_int ';' {
-			$2->hint = H_BYTE;
-			$$=node_add_down($1,$2);
-		};
-
-c_bits: TOKEN_BITS v_int ';' {
 			$2->hint = H_BYTE;
 			$$=node_add_down($1,$2);
 		};

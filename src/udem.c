@@ -150,7 +150,6 @@ token_t DEM_token[]={
 	{ "count",              TOKEN_COUNT, 0 },
 	{ "save",               TOKEN_SAVE, 0 },
 	{ "take",               TOKEN_TAKE, 0 },
-	{ "bits",               TOKEN_BITS, 0 },
 	{ "default_modelindex", TOKEN_DEFAULT_MODELINDEX, 0 },
 	{ "default_frame",      TOKEN_DEFAULT_FRAME, 0 },
 	{ "default_colormap",   TOKEN_DEFAULT_COLORMAP, 0 },
@@ -1874,11 +1873,10 @@ node* do_spawnbaseline2_message_read_bin(BB_t* m)
     default_origin[i] = ReadCoord(m);
     default_angles[i] = ReadAngle(m);
   }
-  default_alpha = (bits & B_ALPHA) ? ReadByte(m) : 255;
+  default_alpha = (bits & B_ALPHA) ? ReadByte(m) : 0;
 
   /* construct node tree and return the root of it */
   n = node_command_init(TOKEN_ENTITY,V_INT,H_SHORT,NODE_VALUE_INT_dup(entity),0);
-  node_add_next(n,node_command_init(TOKEN_BITS,V_INT,H_BYTE,NODE_VALUE_INT_dup(bits),0));
   tn = node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0);
   if (default_modelindex >= 1 &&
       default_modelindex <= DEMTOP->nummodels &&
@@ -1904,7 +1902,7 @@ node* do_spawnbaseline2_message_read_bin(BB_t* m)
 /* 0x2B ----------------------------------------------------------------------*/
 node* do_spawnstatic2_message_read_bin(BB_t* m)
 {
-  node *n, *tn;
+  node *n;
 
   /* variables */
   long default_modelindex;
@@ -1927,17 +1925,15 @@ node* do_spawnstatic2_message_read_bin(BB_t* m)
     default_origin[i] = ReadCoord(m);
     default_angles[i] = ReadAngle(m);
   }
-  default_alpha = (bits & B_ALPHA) ? ReadByte(m) : 255;
+  default_alpha = (bits & B_ALPHA) ? ReadByte(m) : 0;
 
   /* construct node tree and return the root of it */
-  n = node_command_init(TOKEN_BITS,V_INT,H_BYTE,NODE_VALUE_INT_dup(bits),0);
-  tn = node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0);
+  n = node_command_init(TOKEN_DEFAULT_MODELINDEX,V_INT,(bits & B_LARGEMODEL) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_modelindex),0);
   if (default_modelindex >= 1 &&
       default_modelindex <= DEMTOP->nummodels &&
       DEMTOP->precache_models[default_modelindex][0]!='*') {
-    node_add_comment(tn,NODE_VALUE_STRING_dup(DEMTOP->precache_models[default_modelindex]));
+    node_add_comment(n,NODE_VALUE_STRING_dup(DEMTOP->precache_models[default_modelindex]));
   }
-  node_add_next(n,tn);
   node_add_next(n,node_command_init(TOKEN_DEFAULT_FRAME,V_INT,(bits & B_LARGEFRAME) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(default_frame),0));
   node_add_next(n,node_command_init(TOKEN_DEFAULT_COLORMAP,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_colormap),0));
   node_add_next(n,node_command_init(TOKEN_DEFAULT_SKIN,V_INT,H_BYTE,NODE_VALUE_INT_dup(default_skin),0));
@@ -3049,8 +3045,9 @@ void do_dem_spawnstatic2_message_write_bin(node* n, BB_t* m)
   node* a;
   node* a2;
   char ts[1000];
-  int bits;
-
+  long bits;
+  long frame, modelindex, alpha;
+  
   /*
     I don't do any kind of check in here. If the internal structure is
     corrupt this gives a total crash.
@@ -3062,16 +3059,37 @@ void do_dem_spawnstatic2_message_write_bin(node* n, BB_t* m)
   /* at first: the message id */
   WriteByte(m,node_token_id(n->type));
 
-  /* message -> commands */
-  c=n->down; /* bits */
-  if (c->type!=TOKEN_BITS) {
-    syntaxerror(c->pos,"bits expected");
-  }
-  do_simple_argument_write_bin(c->down,m);
-  a=c->down;
-  bits = *(long*)a->down;
+  bits = 0;
 
-  c=c->next; /* default_modelindex */
+  /* bits */
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    c=n->down; /* default_modelindex */
+    a=c->down;
+    modelindex = *(long*)a->down;
+    if (modelindex & 0xFF00)
+      bits |= B_LARGEMODEL;
+
+    c=c->next; /* default_frame */
+    a=c->down;
+    frame = *(long*)a->down;
+    if (frame & 0xFF00)
+      bits |= B_LARGEFRAME;
+
+    c=c->next; /* default_colormap */
+    c=c->next; /* default_skin */
+    c=c->next; /* default_origin */
+    c=c->next; /* default_angles */
+
+    c=c->next; /* default_alpha */
+    a=c->down;
+    alpha = *(long*)a->down;
+    if (alpha != 0)
+      bits |= B_ALPHA;
+  }
+  
+  WriteByte(m,bits);
+
+  c=n->down; /* default_modelindex */
   if (c==NULL) syntaxerror(n->pos, "command default_modelindex missing");
   if (c->type!=TOKEN_DEFAULT_MODELINDEX) {
     sprintf(ts, "command is %s, should be %s", 
@@ -3163,7 +3181,8 @@ void do_dem_spawnbaseline2_message_write_bin(node* n, BB_t* m)
   node* a;
   node* a2;
   char ts[1000];
-  int bits;
+  long bits;
+  long frame, modelindex, alpha;
 
   /* 
     I don't do any kind of check in here. If the internal structure is
@@ -3176,6 +3195,35 @@ void do_dem_spawnbaseline2_message_write_bin(node* n, BB_t* m)
   /* at first: the message id */
   WriteByte(m,node_token_id(n->type));
 
+  bits = 0;
+
+  /* bits */
+  if (serverversion != PROTOCOL_NETQUAKE) {
+    c=n->down; /* entity */
+    c=c->next; /* default_modelindex */
+    a=c->down;
+    modelindex = *(long*)a->down;
+    if (modelindex & 0xFF00)
+      bits |= B_LARGEMODEL;
+
+    c=c->next; /* default_frame */
+    a=c->down;
+    frame = *(long*)a->down;
+    if (frame & 0xFF00)
+      bits |= B_LARGEFRAME;
+
+    c=c->next; /* default_colormap */
+    c=c->next; /* default_skin */
+    c=c->next; /* default_origin */
+    c=c->next; /* default_angles */
+
+    c=c->next; /* default_alpha */
+    a=c->down;
+    alpha = *(long*)a->down;
+    if (alpha != 0)
+      bits |= B_ALPHA;
+  }
+  
   /* message -> commands */
   c=n->down; /* entity */
   if (c==NULL) syntaxerror(n->pos, "command entity missing");
@@ -3187,14 +3235,7 @@ void do_dem_spawnbaseline2_message_write_bin(node* n, BB_t* m)
   }
   do_simple_argument_write_bin(c->down,m);
 
-  c=c->next; /* bits */
-  if (c==NULL) syntaxerror(n->pos, "command bits missing");
-  if (c->type!=TOKEN_BITS) {
-    syntaxerror(c->pos,"bits expected");
-  }
-  do_simple_argument_write_bin(c->down,m);
-  a=c->down;
-  bits = *(long*)a->down;
+  WriteByte(m,bits);
 
   c=c->next; /* default_modelindex */
   if (c==NULL) syntaxerror(n->pos, "command default_modelindex missing");
