@@ -181,14 +181,6 @@ token_t DEM_token[]={
 	{ "alpha",              TOKEN_ALPHA, 0 },
 	{ "scale",              TOKEN_SCALE, 0 },
 	{ "lerpfinish",         TOKEN_LERPFINISH, 0 },
-	{ "weaponmodel2",       TOKEN_WEAPONMODEL2, 0 },
-	{ "armorvalue2",        TOKEN_ARMORVALUE2, 0 },
-	{ "currentammo2",       TOKEN_CURRENTAMMO2, 0 },
-	{ "ammo_shells2",       TOKEN_AMMO_SHELLS2, 0 },
-	{ "ammo_nails2",        TOKEN_AMMO_NAILS2, 0 },
-	{ "ammo_rockets2",      TOKEN_AMMO_ROCKETS2, 0 },
-	{ "ammo_cells2",        TOKEN_AMMO_CELLS2, 0 },		
-	{ "weaponframe2",       TOKEN_WEAPONFRAME2, 0 },
 	{ "weaponalpha",        TOKEN_WEAPONALPHA, 0 },
 	{ "density",            TOKEN_DENSITY, 0 },
 	{ "red",                TOKEN_RED, 0 },
@@ -999,16 +991,6 @@ node* do_clientdata_message_read_bin(BB_t* m)
   long ammo_rockets;
   long ammo_cells;
   long weapon;
-
-  // PROTOCOL_FITZQUAKE related
-  long weaponmodel2;
-  long armorvalue2;
-  long currentammo2;
-  long ammo_shells2;
-  long ammo_nails2;
-  long ammo_rockets2;
-  long ammo_cells2;
-  long weaponframe2;
   long weaponalpha;
 
   long uk_bit_b10, uk_bit_b11; /* unknown (unused ??) */
@@ -1049,14 +1031,23 @@ node* do_clientdata_message_read_bin(BB_t* m)
   weapon = ReadByte(m);
 
   if (serverversion != PROTOCOL_NETQUAKE) {
-    weaponmodel2 = (mask & SU_WEAPON2) ? ReadByte(m) : 0;
-    armorvalue2 = (mask & SU_ARMOR2) ? ReadByte(m) : 0;
-    currentammo2 = (mask & SU_AMMO2) ? ReadByte(m) : 0;
-    ammo_shells2 = (mask & SU_SHELLS2) ? ReadByte(m) : 0;
-    ammo_nails2 = (mask & SU_NAILS2) ? ReadByte(m) : 0;
-    ammo_rockets2 = (mask & SU_ROCKETS2) ? ReadByte(m) : 0;
-    ammo_cells2 = (mask & SU_CELLS2) ? ReadByte(m) : 0;
-    weaponframe2 = (mask & SU_WEAPONFRAME2) ? ReadByte(m) : 0;
+    if (mask & SU_WEAPON2)
+      weaponmodel |= (ReadByte(m) << 8);
+    if (mask & SU_ARMOR2)
+      armorvalue |= (ReadByte(m) << 8);
+    if (mask & SU_AMMO2)
+      currentammo |= (ReadByte(m) << 8);
+    if (mask & SU_SHELLS2)
+      ammo_shells |= (ReadByte(m) << 8);
+    if (mask & SU_NAILS2)
+      ammo_nails |= (ReadByte(m) << 8);
+    if (mask & SU_ROCKETS2)
+      ammo_rockets |= (ReadByte(m) << 8);
+    if (mask & SU_CELLS2)
+      ammo_cells |= (ReadByte(m) << 8);
+    if (mask & SU_WEAPONFRAME2)
+      weaponframe |= (ReadByte(m) << 8);
+
     weaponalpha = (mask & SU_WEAPONALPHA) ? ReadByte(m) : 0;
   }
 
@@ -1161,9 +1152,9 @@ node* do_clientdata_message_read_bin(BB_t* m)
 
   if (uk_bit_b10) n=node_link(n,node_init_all(TOKEN_UK_BIT_B10,0,NULL,0));
   if (uk_bit_b11) n=node_link(n,node_init_all(TOKEN_UK_BIT_B11,0,NULL,0));
-  if (mask & 0x1000) n=node_link(n,node_command_init(TOKEN_WEAPONFRAME,V_INT,H_BYTE,NODE_VALUE_INT_dup(weaponframe),0));
+  if (mask & 0x1000) n=node_link(n,node_command_init(TOKEN_WEAPONFRAME,V_INT,(mask & SU_WEAPONFRAME2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(weaponframe),0));
   if (mask & 0x2000) {
-    tn=node_command_init(TOKEN_ARMORVALUE,V_INT,H_BYTE,NODE_VALUE_INT_dup(armorvalue),0);
+    tn=node_command_init(TOKEN_ARMORVALUE,V_INT,(mask & SU_ARMOR2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(armorvalue),0);
     if (DEMTOP->lastMinusArmor && 
         DEMTOP->lastArmor - DEMTOP->lastMinusArmor != armorvalue) {
       node_add_comment(tn,NODE_VALUE_STRING_dup("unexpected armorvalue: do you cheat?"));
@@ -1174,7 +1165,7 @@ node* do_clientdata_message_read_bin(BB_t* m)
   }
 
   if (mask & 0x4000) {
-    tn=node_command_init(TOKEN_WEAPONMODEL,V_INT,H_BYTE,NODE_VALUE_INT_dup(weaponmodel),0);
+    tn=node_command_init(TOKEN_WEAPONMODEL,V_INT,(mask & SU_WEAPON2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(weaponmodel),0);
     if (weaponmodel>=1 && 
         weaponmodel<=DEMTOP->nummodels &&
         DEMTOP->precache_models[weaponmodel][0]!='*') {
@@ -1192,11 +1183,11 @@ node* do_clientdata_message_read_bin(BB_t* m)
   DEMTOP->lastHealth=health;
   DEMTOP->lastMinusHealth=0;
 
-  node_add_next(n,node_command_init(TOKEN_CURRENTAMMO,V_INT,H_BYTE,NODE_VALUE_INT_dup(currentammo),0));
-  node_add_next(n,node_command_init(TOKEN_AMMO_SHELLS,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_shells),0));
-  node_add_next(n,node_command_init(TOKEN_AMMO_NAILS,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_nails),0));
-  node_add_next(n,node_command_init(TOKEN_AMMO_ROCKETS,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_rockets),0));
-  node_add_next(n,node_command_init(TOKEN_AMMO_CELLS,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_cells),0));
+  node_add_next(n,node_command_init(TOKEN_CURRENTAMMO,V_INT,(mask & SU_AMMO2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(currentammo),0));
+  node_add_next(n,node_command_init(TOKEN_AMMO_SHELLS,V_INT,(mask & SU_SHELLS2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(ammo_shells),0));
+  node_add_next(n,node_command_init(TOKEN_AMMO_NAILS,V_INT,(mask & SU_NAILS2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(ammo_nails),0));
+  node_add_next(n,node_command_init(TOKEN_AMMO_ROCKETS,V_INT,(mask & SU_ROCKETS2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(ammo_rockets),0));
+  node_add_next(n,node_command_init(TOKEN_AMMO_CELLS,V_INT,(mask & SU_CELLS2) ? H_SHORT : H_BYTE,NODE_VALUE_INT_dup(ammo_cells),0));
   
   if (weapon) {
     for (i=2, j=weapon, tn=NULL; j; j>>=1, i++) {
@@ -1209,30 +1200,6 @@ node* do_clientdata_message_read_bin(BB_t* m)
   }
 
   if (serverversion != PROTOCOL_NETQUAKE) {
-    if (mask & SU_WEAPON2) { 
-      node_add_next(n,node_command_init(TOKEN_WEAPONMODEL2,V_INT,H_BYTE,NODE_VALUE_INT_dup(weaponmodel2),0));
-    }
-    if (mask & SU_ARMOR2) { 
-      node_add_next(n,node_command_init(TOKEN_ARMORVALUE2,V_INT,H_BYTE,NODE_VALUE_INT_dup(armorvalue2),0));
-    }
-    if (mask & SU_AMMO2) { 
-      node_add_next(n,node_command_init(TOKEN_CURRENTAMMO2,V_INT,H_BYTE,NODE_VALUE_INT_dup(currentammo2),0));
-    }
-    if (mask & SU_SHELLS2) { 
-      node_add_next(n,node_command_init(TOKEN_AMMO_SHELLS2,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_shells2),0));
-    }
-    if (mask & SU_NAILS2) { 
-      node_add_next(n,node_command_init(TOKEN_AMMO_NAILS2,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_nails2),0));
-    }
-    if (mask & SU_ROCKETS2) { 
-      node_add_next(n,node_command_init(TOKEN_AMMO_ROCKETS2,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_rockets2),0));
-    }
-    if (mask & SU_CELLS2) { 
-      node_add_next(n,node_command_init(TOKEN_AMMO_CELLS2,V_INT,H_BYTE,NODE_VALUE_INT_dup(ammo_cells2),0));
-    }
-    if (mask & SU_WEAPONFRAME2) { 
-      node_add_next(n,node_command_init(TOKEN_WEAPONFRAME2,V_INT,H_BYTE,NODE_VALUE_INT_dup(weaponframe2),0));
-    }
     if (mask & SU_WEAPONALPHA) { 
       node_add_next(n,node_command_init(TOKEN_WEAPONALPHA,V_INT,H_BYTE,NODE_VALUE_INT_dup(weaponalpha),0));
     }
@@ -2382,6 +2349,8 @@ void do_dem_clientdata_message_write_bin(node* n, BB_t* m)
   unsigned long items;
   float angles_1, angles_2, angles_3;
   float vel_x, vel_y, vel_z;
+  long weaponmodel, armorvalue, weaponframe, weaponalpha;
+  long currentammo, ammo_shells, ammo_nails, ammo_rockets, ammo_cells;
 
   /*
     I don't do any kind of check in here. If the internal structure is
@@ -2479,19 +2448,60 @@ void do_dem_clientdata_message_write_bin(node* n, BB_t* m)
                            break;
       case TOKEN_UK_BIT_B10:   mask |= 0x0400; break;
       case TOKEN_UK_BIT_B11:   mask |= 0x0800; break;
-      case TOKEN_WEAPONFRAME:  mask |= 0x1000; break;
-      case TOKEN_ARMORVALUE:   mask |= 0x2000; break;
-      case TOKEN_WEAPONMODEL:  mask |= 0x4000; break;
-
-      case TOKEN_WEAPONMODEL2: mask |= SU_WEAPON2; break;
-      case TOKEN_ARMORVALUE2:  mask |= SU_ARMOR2; break;
-      case TOKEN_CURRENTAMMO2: mask |= SU_AMMO2; break;
-      case TOKEN_AMMO_SHELLS2: mask |= SU_SHELLS2; break;
-      case TOKEN_AMMO_NAILS2:  mask |= SU_NAILS2; break;
-      case TOKEN_AMMO_ROCKETS2: mask |= SU_ROCKETS2; break;
-      case TOKEN_AMMO_CELLS2:  mask |= SU_CELLS2; break;
-      case TOKEN_WEAPONFRAME2: mask |= SU_WEAPONFRAME2; break;
-      case TOKEN_WEAPONALPHA:  mask |= SU_WEAPONALPHA; break;
+      case TOKEN_WEAPONFRAME:  mask |= 0x1000; 
+                          a=c->down;
+                          weaponframe = *(long*)a->down;
+                          if (weaponframe & 0xFF00)
+                            mask |= SU_WEAPONFRAME2;
+                          break;
+      case TOKEN_ARMORVALUE:   mask |= 0x2000; 
+                          a=c->down;
+                          armorvalue = *(long*)a->down;
+                          if (armorvalue & 0xFF00)
+                            mask |= SU_ARMOR2;
+                          break;
+      case TOKEN_WEAPONMODEL:  mask |= 0x4000; 
+                          a=c->down;
+                          weaponmodel = *(long*)a->down;
+                          if (weaponmodel & 0xFF00)
+                            mask |= SU_WEAPON2;
+                          break;
+      case TOKEN_CURRENTAMMO: 
+                          a=c->down;
+                          currentammo = *(long*)a->down;
+                          if (currentammo & 0xFF00)
+                            mask |= SU_AMMO2; 
+                          break;
+      case TOKEN_AMMO_SHELLS: 
+                          a=c->down;
+                          ammo_shells = *(long*)a->down;
+                          if (ammo_shells & 0xFF00)
+                            mask |= SU_SHELLS2; 
+                          break;
+      case TOKEN_AMMO_NAILS:  
+                          a=c->down;
+                          ammo_nails = *(long*)a->down;
+                          if (ammo_nails & 0xFF00)
+                            mask |= SU_NAILS2; 
+                          break;
+      case TOKEN_AMMO_ROCKETS: 
+                          a=c->down;
+                          ammo_rockets = *(long*)a->down;
+                          if (ammo_rockets & 0xFF00)
+                            mask |= SU_ROCKETS2; 
+                          break;
+      case TOKEN_AMMO_CELLS:  
+                          a=c->down;
+                          ammo_cells = *(long*)a->down;
+                          if (ammo_cells & 0xFF00)
+                            mask |= SU_CELLS2; 
+                          break;
+      case TOKEN_WEAPONALPHA:  
+                          a=c->down;
+                          weaponalpha = *(long*)a->down;
+                          if (weaponalpha != 0)
+                            mask |= SU_WEAPONALPHA; 
+                          break;
     }
   }
   if (serverversion != PROTOCOL_NETQUAKE) {
@@ -2620,40 +2630,31 @@ void do_dem_clientdata_message_write_bin(node* n, BB_t* m)
 
   if (serverversion != PROTOCOL_NETQUAKE) {
     if (mask & SU_WEAPON2) { /* weaponmodel2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+      WriteByte(m, weaponmodel >> 8);
     }
     if (mask & SU_ARMOR2) { /* armorvalue2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+      WriteByte(m, armorvalue >> 8);
     }
     if (mask & SU_AMMO2) { /* currentammo2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+      WriteByte(m, currentammo >> 8);
     }
     if (mask & SU_SHELLS2) { /* ammo_shells2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+      WriteByte(m, ammo_shells >> 8);
     }
     if (mask & SU_NAILS2) { /* ammo_nails2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+      WriteByte(m, ammo_nails >> 8);
     }
     if (mask & SU_ROCKETS2) { /* ammo_rockets2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+      WriteByte(m, ammo_rockets >> 8);
     }
     if (mask & SU_CELLS2) { /* ammo_cells2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+      WriteByte(m, ammo_cells >> 8);
     }
     if (mask & SU_WEAPONFRAME2) { /* weaponframe2 */
-      do_simple_argument_write_bin(c->down, m);
-      c=c->next;
+      WriteByte(m, weaponframe >> 8);
     }
     if (mask & SU_WEAPONALPHA) { /* weaponalpha */
       do_simple_argument_write_bin(c->down, m);
-      c=c->next;
     }
   }
 }
