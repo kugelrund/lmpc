@@ -539,6 +539,7 @@ m_setangle: TOKEN_SETANGLE floatvector ';' {
 dem_m_serverinfo: TOKEN_SERVERINFO '{' dem_mcs_serverinfo '}' {
 			CO_t serverinfo_cs[] = {
 			  { TOKEN_SERVERVERSION, 1 },
+			  { TOKEN_PROTOCOLFLAGS, 0 },
 			  { TOKEN_MAXCLIENTS,    1 },
 			  { TOKEN_MULTI,         1 },
 			  { TOKEN_MAPNAME,       1 },
@@ -557,6 +558,7 @@ dem_mcs_serverinfo: dem_mc_serverinfo {	$$=$1;	}
 
 dem_mc_serverinfo: c_serverversion { $$=$1; }
 		| c_maxclients { $$=$1; }
+		| c_protocolflags { $$=$1; }
 		| c_multi { $$=$1; }
 		| c_mapname { $$=$1; }
 		| c_models { $$=$1; }
@@ -2297,6 +2299,11 @@ c_fogtime: TOKEN_FOGTIME v_int ';' {
 c_serverversion: TOKEN_SERVERVERSION v_int ';' {
 			/* memorize the server version in a global variable */
 			SERVERVERSION = *((long*)($2->down));
+			$2->hint = H_LONG;
+			$$=node_add_down($1,$2);
+		};
+
+c_protocolflags: TOKEN_PROTOCOLFLAGS v_int ';' {
 			$2->hint = H_LONG;
 			$$=node_add_down($1,$2);
 		};

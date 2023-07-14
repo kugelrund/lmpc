@@ -187,6 +187,7 @@ token_t DEM_token[]={
 	{ "green",              TOKEN_GREEN, 0 },
 	{ "blue",               TOKEN_BLUE, 0 },
 	{ "fogtime",            TOKEN_FOGTIME, 0 },
+	{ "protocolflags",      TOKEN_PROTOCOLFLAGS, 0 },
         { NULL, 0, 0}
 };
 
@@ -797,6 +798,10 @@ node* do_setangle_message_read_bin(BB_t* m)
 // must be declared as global, we need to check it when reading updateentity
 long serverversion;
 
+#define	PROTOCOL_NETQUAKE	  15	//johnfitz -- standard quake protocol
+#define PROTOCOL_FITZQUAKE	666 //johnfitz -- added new protocol for fitzquake 0.85
+#define PROTOCOL_RMQ		    999
+
 /* 0x0B ----------------------------------------------------------------------*/ 
 node* do_serverinfo_message_read_bin(BB_t* m)
 {
@@ -806,12 +811,16 @@ node* do_serverinfo_message_read_bin(BB_t* m)
   char buf[MAX_STRING_SIZE];
 
   /* variables */
+  long protocolflags;
   long maxclients;
   long multi;
   char mapname[MAX_STRING_SIZE];
 
   /* binary in */
   serverversion = ReadLong(m);
+  if (serverversion == PROTOCOL_RMQ) {
+    protocolflags = ReadLong(m);
+  }
   maxclients = ReadByte(m);
   multi = ReadByte(m);
   ReadString(m, mapname);
@@ -860,6 +869,7 @@ node* do_serverinfo_message_read_bin(BB_t* m)
 
   /* construct node tree and return the root of it */
   n = node_command_init(TOKEN_SERVERVERSION,V_INT,H_LONG,NODE_VALUE_INT_dup(serverversion),0);
+  node_add_next(n,node_command_init(TOKEN_PROTOCOLFLAGS,V_INT,H_LONG,NODE_VALUE_INT_dup(protocolflags),0));
   node_add_next(n,node_command_init(TOKEN_MAXCLIENTS,V_INT,H_BYTE,NODE_VALUE_INT_dup(maxclients),0));
   node_add_next(n,node_command_init(TOKEN_MULTI,V_INT,H_BYTE,NODE_VALUE_INT_dup(multi),0));
   node_add_next(n,node_command_init(TOKEN_MAPNAME,V_STRING,H_STRING,NODE_VALUE_STRING_dup(mapname),0));
@@ -950,9 +960,6 @@ node* do_updatefrags_message_read_bin(BB_t* m)
   /* return node */
   return n;
 }
-
-#define	PROTOCOL_NETQUAKE	  15	//johnfitz -- standard quake protocol
-#define PROTOCOL_FITZQUAKE	666 //johnfitz -- added new protocol for fitzquake 0.85
 
 #define SU_EXTEND1		(1<<15) // another byte to follow
 #define SU_WEAPON2		(1<<16) // 1 byte, this is .weaponmodel & 0xFF00 (second byte)
