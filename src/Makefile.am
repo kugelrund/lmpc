@@ -21,7 +21,7 @@ EXTRA_DIST = udeml.l.in udemy.y.in tokenlist.in udm3.c $(CALC_FROM_SPECS)
 CLEANFILES = udemy.y udemy.c udemy.h udeml.l udeml.c tokenlist tokenlist.tmp \
 	demotextl.c demotexty.c demotexty.h
 
-BUILT_SOURCES = udeml.l udemy.y 
+BUILT_SOURCES = udeml.l udemy.y udemy.h
 
 dbs_SOURCES = dbs.c node.c udem.c
 dbs_LDADD = $(NETLIBS) libutil.a
