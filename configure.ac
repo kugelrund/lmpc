@@ -15,18 +15,15 @@ dnl Here is the end of the main version definition area.
 dnl -----------------------------------------------------
 
 dnl This defines PACKAGE_BUGREPORT, PACKAGE_NAME, AC_PACKAGE_TARNAME, AC_PACKAGE_VERSION
-AC_INIT(MY_TITLE,MY_VERSION,MY_EMAIL,MY_PACKAGE)
+AC_INIT([MY_TITLE],[MY_VERSION],[MY_EMAIL],[MY_PACKAGE])
 dnl get system type
-AC_CANONICAL_SYSTEM
+AC_CANONICAL_TARGET
 
 USE_CPLUSPLUS=no
 
-dnl I know it. The better way is to bring the package and version
-dnl only here but wpu can only parse the upper variant (on two lines).
-dnl this defines PACKAGE and VERSION
-AM_INIT_AUTOMAKE(AC_PACKAGE_TARNAME,AC_PACKAGE_VERSION)
+AM_INIT_AUTOMAKE([subdir-objects])
 
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS([config.h])
 
 dnl automake needs this
 dnl AC_ARG_PROGRAM
@@ -63,7 +60,7 @@ AC_PATH_PROG(JAR, jar)dnl
 AC_PATH_PROG(JAVA, java)dnl
 AC_PATH_PROG(JAVAC, javac)dnl
 AC_PATH_PROG([JFLEX], [jflex], [true], [$PATH:/usr/self/bin])dnl
-AM_PROG_LEX
+AC_PROG_LEX(noyywrap)
 AC_PROG_MAKE_SET
 AC_PATH_PROG(PERL, perl)dnl
 AC_PROG_RANLIB
@@ -112,7 +109,7 @@ if test $USE_CPLUSPLUS = yes; then
   fi
 
   dnl we need the C++ compiler for the following tests
-  AC_LANG_CPLUSPLUS
+  AC_LANG([C++])
 fi
 
 dnl Checks for libraries.
@@ -121,7 +118,6 @@ AC_CHECK_LIB(nsl,gethostbyname,NETLIBS="$NETLIBS -lnsl",,)
 AC_CHECK_LIB(socket,socket,NETLIBS="$NETLIBS -lsocket",,)
 
 dnl Check for header files.
-AC_HEADER_STDC
 AC_CHECK_HEADERS(memory.h sys/ipc.h sys/shm.h sys/time.h string.h)
 
 dnl Checks for typedefs, structures, and compiler characteristics.
@@ -130,7 +126,6 @@ dnl AC_C_CONST
 AC_TYPE_OFF_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
-AC_HEADER_TIME
 AC_STRUCT_TM
 
 dnl Checks for library functions.
@@ -288,7 +283,7 @@ if test ${ENABLE_JAVA} = "yes" ; then
 fi
 
 dnl general output
-AC_OUTPUT([ \
+AC_CONFIG_FILES([ \
 	Makefile bin/Makefile \
         spec/Makefile \
         spec/dem-q1/Makefile \
@@ -305,12 +300,13 @@ AC_OUTPUT([ \
         files/Makefile \
         bin/dema \
         bin/dm2cat \
-	src/quake3/Makefile],
-[echo timestamp > stamp-h ; chmod +x bin/dema bin/dm2cat])
+	src/quake3/Makefile])
+AC_CONFIG_COMMANDS([default],[echo timestamp > stamp-h ; chmod +x bin/dema bin/dm2cat],[])
+AC_OUTPUT
 
 dnl Java releated output
 if test ${ENABLE_JAVA} = "yes" ; then
-AC_OUTPUT([ \
+AC_CONFIG_FILES([ \
 	src/java/Makefile \
         src/java/lmpcj \
         src/java/com/Makefile \
@@ -321,6 +317,7 @@ AC_OUTPUT([ \
         src/java/com/machinima/lmpc/io/node/Makefile \
         src/java/com/machinima/lmpc/io/text/Makefile \
         src/java/com/machinima/lmpc/io/bin/Makefile])
+AC_OUTPUT
 AC_CONFIG_COMMANDS(lmpcj,[chmod +x src/java/lmpcj])
 fi
 
