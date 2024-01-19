@@ -18,13 +18,17 @@ bin/lmpc.exe
 bin/lmpcm.exe
 bin/Makefile
 bin/Makefile.in
+build
+compile
 config.guess
 config.h
 config.h.in
+config.h.in~
 config.log
 config.status
 config.sub
 configure
+configure~
 depcomp
 doc/index.html
 doc/indexpart.html
