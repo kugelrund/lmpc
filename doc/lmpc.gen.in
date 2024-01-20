@@ -4116,6 +4116,17 @@ for the bug report and a demo file.</para>
 </itemizedlist>
 </para>
 
+<varlistentry>
+<term>3.5.1 (20/01/2024) (alpha release)</term>
+<listitem>
+<para>
+<itemizedlist>
+<listitem>
+<para>DEM: Only write protocolflags in text conversion for protocol 999 (bugfix).</para>
+</listitem>
+</itemizedlist>
+</para>
+
 </variablelist>
 
 <para>Plan for 4.0.0 in order of importance

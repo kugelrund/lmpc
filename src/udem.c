@@ -818,6 +818,7 @@ node* do_serverinfo_message_read_bin(BB_t* m)
 
   /* binary in */
   serverversion = ReadLong(m);
+  protocolflags = 0;
   if (serverversion == PROTOCOL_RMQ) {
     protocolflags = ReadLong(m);
   }
@@ -869,7 +870,9 @@ node* do_serverinfo_message_read_bin(BB_t* m)
 
   /* construct node tree and return the root of it */
   n = node_command_init(TOKEN_SERVERVERSION,V_INT,H_LONG,NODE_VALUE_INT_dup(serverversion),0);
-  node_add_next(n,node_command_init(TOKEN_PROTOCOLFLAGS,V_INT,H_LONG,NODE_VALUE_INT_dup(protocolflags),0));
+  if (serverversion == PROTOCOL_RMQ) {
+    node_add_next(n,node_command_init(TOKEN_PROTOCOLFLAGS,V_INT,H_LONG,NODE_VALUE_INT_dup(protocolflags),0));
+  }
   node_add_next(n,node_command_init(TOKEN_MAXCLIENTS,V_INT,H_BYTE,NODE_VALUE_INT_dup(maxclients),0));
   node_add_next(n,node_command_init(TOKEN_MULTI,V_INT,H_BYTE,NODE_VALUE_INT_dup(multi),0));
   node_add_next(n,node_command_init(TOKEN_MAPNAME,V_STRING,H_STRING,NODE_VALUE_STRING_dup(mapname),0));
