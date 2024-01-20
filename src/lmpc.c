@@ -650,7 +650,7 @@ int main(int argc, char **argv)
 void syntax(void)
 {
   fprintf(stderr,"Little Movie Processing Centre\n");
-  fprintf(stderr,"LMPC (c) U. Girlich, 1994-2009, Release %s %s (%s)\n", VERSION, DATE, COMMENT);
+  fprintf(stderr,"LMPC (c) U. Girlich, 1994-2009, J. Szalontai, 2024, Release %s %s (%s)\n", VERSION, DATE, COMMENT);
   fprintf(stderr,"lmpc [option ...] filename [filename ...]\n");
   fprintf(stderr,"-h, --help                   display this help and exit.\n");
   fprintf(stderr,"-V, --version                output version information and exit.\n");
